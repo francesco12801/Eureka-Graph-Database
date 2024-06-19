@@ -1,2 +1,2 @@
 # graph_db
-Graph Database for social network analysis made by NEO4J knowledge graph. 
+Graph Database for social network analysis through NEO4J knowledge graph. 
