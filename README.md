@@ -15,7 +15,7 @@ Let's start from the scratch.
    FOR (u:User) REQUIRE u.userId IS UNIQUE
 
    MERGE (u:User {
-      userId: row.id,
+      userId: toInteger(row.id),
       screenName: row.screenName,
       avatar: row.avatar,
       followersCount: toInteger(row.followersCount),
@@ -30,7 +30,7 @@ Let's start from the scratch.
    // -> solution: put every other field to NULL
    UNWIND row.friends as friendId
       MERGE (f:User {
-         userId: friendId,
+         userId: toInteger(friendId),
          screenName: null,
          avatar: null,
          followersCount: null*,
@@ -43,7 +43,7 @@ Let's start from the scratch.
 
    // Create `Post` nodes
    MERGE (p:Post {
-      postId: row.tweetId,
+      postId: toInteger(row.tweetId),
       timestamp: datetime({epochmillis:row.lastSeen})
    } );
 
