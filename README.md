@@ -8,20 +8,7 @@ Let's start from the scratch.
    In our case we have:
    
    ``` c
-   // Create `User` nodes and 0FOLLOWS' relationships
-   LOAD CSV WITH HEADERS FROM 'file:///data.csv' AS row
 
-   CREATE CONSTRAINT user_id
-   FOR (u:User) REQUIRE u.userId IS UNIQUE
-
-   MERGE (u:User {
-      userId: toInteger(row.id),
-      screenName: row.screenName,
-      avatar: row.avatar,
-      followersCount: toInteger(row.followersCount),
-      followingCount: toInteger(row.friendsCount),
-      lang: row.lang
-   } );
    
    // TODO: We may have to create users scanning friends of every user in every row
    // make sure that we don't create duplicate user
