@@ -24,3 +24,11 @@ ON CREATE
 
 MERGE (u)-[:TWEETED]->(p)
 
+WITH row
+// Create Tag nodes and connect them to Post nodes
+MATCH (p:Post {postId: toInteger(row.tweetId)})
+UNWIND split(row.tags, "|") as tagText
+    MERGE (t:Tag {text: tagText})
+    MERGE (p)-[:HAS_TAG]->(t)
+
+
