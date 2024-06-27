@@ -13,4 +13,13 @@ Let's start from the scratch.
     - Adding metadata to get the context ??? in relational it's impossible. 
 
 
+## Useful links
+### Importing
+- https://neo4j.com/docs/getting-started/data-import/
 
+### Indexes
+- https://neo4j.com/developer/kb/a-method-to-calculate-index-size/
+- https://neo4j.com/docs/cypher-manual/current/indexes/search-performance-indexes/managing-indexes/#create-indexes
+- https://neo4j.com/docs/cypher-manual/current/indexes/search-performance-indexes/using-indexes/
+
+### Queries
