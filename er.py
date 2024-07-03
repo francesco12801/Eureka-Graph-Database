@@ -38,7 +38,7 @@ commands = [
     """,
     """
     CREATE TABLE IF NOT EXISTS "Tag" (
-        text VARCHAR(50) PRIMARY KEY
+        text VARCHAR(255) PRIMARY KEY
     )
     """,
     """
@@ -53,7 +53,7 @@ commands = [
     """
     CREATE TABLE IF NOT EXISTS "Has_Tag" (
         postId BIGINT NOT NULL,
-        tagText VARCHAR(50) NOT NULL,
+        tagText VARCHAR(255) NOT NULL,
         PRIMARY KEY (postId, tagText),
         FOREIGN KEY (postId) REFERENCES "Post" (postId),
         FOREIGN KEY (tagText) REFERENCES "Tag" (text)
@@ -127,7 +127,11 @@ def insert_other_data(reader):
 
         friends = row['friends'].split('|')
         for friend in friends:
-            insert_follows(int(row['id']), int(friend))
+            if friend.strip():  # Controlla che il valore non sia vuoto
+                try:
+                    insert_follows(int(row['id']), int(friend))
+                except ValueError:
+                    print(f"Skipping invalid friend ID: {friend}")
 
 # Leggi il file CSV e inserisci i dati nel database
 with open('data.csv', 'r') as f:
