@@ -10,14 +10,21 @@ load_dotenv()
 csv.field_size_limit(sys.maxsize)
 
 # Connessione al database PostgreSQL
+print("Connecting to database..")
+DBNAME=os.getenv('DBNAME', 'dataManagement')
+USER=os.getenv('USER', 'postgres')
+PASSWORD=os.getenv('PASSWORD', '2345')
+HOST=os.getenv('HOST', '127.0.0.1')
+PORT=os.getenv('PORT', '5432')
+
 conn = psycopg2.connect(
-    dbname=os.getenv('DBNAME', 'dataManagement'),
-    user=os.getenv('USER', 'postgres'),
-    password=os.getenv('PASSWORD', '2345'),
-    host=os.getenv('HOST', '127.0.0.1'),
-    port=os.getenv('PORT', '5432')
+    dbname=DBNAME,
+    user=USER,
+    password=PASSWORD,
+    host=HOST,
+    port=PORT
 )
-# Crea un cursore
+print(f"Done! '{USER}' has connected to '{DBNAME}' at {HOST}:{PORT}")
 cur = conn.cursor()
 
 cur.execute("""

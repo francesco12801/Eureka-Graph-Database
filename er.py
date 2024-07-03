@@ -23,15 +23,23 @@ except (IndexError, ValueError):
 finally:
     print(f"Consider only {rows_limit} rows.")
 
-print("Connecting to database..")
+
 # Connessione al database PostgreSQL
+print("Connecting to database..")
+DBNAME=os.getenv('DBNAME', 'dataManagement')
+USER=os.getenv('USER', 'postgres')
+PASSWORD=os.getenv('PASSWORD', '2345')
+HOST=os.getenv('HOST', '127.0.0.1')
+PORT=os.getenv('PORT', '5432')
+
 conn = psycopg2.connect(
-    dbname=os.getenv('DBNAME', 'dataManagement'),
-    user=os.getenv('USER', 'postgres'),
-    password=os.getenv('PASSWORD', '2345'),
-    host=os.getenv('HOST', '127.0.0.1'),
-    port=os.getenv('PORT', '5432')
+    dbname=DBNAME,
+    user=USER,
+    password=PASSWORD,
+    host=HOST,
+    port=PORT
 )
+print(f"Done! '{USER}' has connected to '{DBNAME}' at {HOST}:{PORT}")
 cur = conn.cursor()
 
 # Creazione delle tabelle
@@ -39,7 +47,7 @@ commands = [
     """
     CREATE TABLE IF NOT EXISTS "User" (
         userId BIGINT PRIMARY KEY,
-        screenName VARCHAR(50),
+        screenName VARCHAR(50) UNIQUE,
         avatar VARCHAR(255),
         followersCount INT,
         followingCount INT,
@@ -115,6 +123,13 @@ def insert_has_tag(postId, tag):
         ON CONFLICT (postId, tagText) DO NOTHING
     """, (postId, tag))
 
+# Funzione per ottenere numero di User
+def get_users_count():
+    cur.execute("""
+        SELECT count(*) FROM "User"
+    """)
+    return cur.fetchone()[0]
+
 # Funzione per inserire i dati nella tabella Follows
 def insert_follows(userId, friendId):
     # Inserisci l'amico come utente se non esiste già
@@ -145,12 +160,20 @@ def insert_follows(userId, friendId):
 
 # Funzione per inserire tutti gli utenti
 def insert_all_users(reader):
+    print("Inserting users..")
+
+    total = 0
     for row in reader:
         insert_user(row)
+        total = total+1
+
+    print(f"Done! (Inserted {total} users)")
 
 # Funzione per inserire tutti i post, tag e relazioni di follow
 def insert_other_data(reader):
-    for row in reader:
+    new_users = 0
+
+    for i, row in enumerate(reader):
         insert_post(row)
 
         tags = row['tags'].split('|')
@@ -159,6 +182,9 @@ def insert_other_data(reader):
             insert_has_tag(int(row['tweetId']), tag)
 
         friends = row['friends'].split('|')
+
+        no_users = get_users_count()
+
         for friend in friends:
             if friend.strip():  # Controlla che il valore non sia vuoto
                 try:
@@ -166,10 +192,16 @@ def insert_other_data(reader):
                 except ValueError:
                     print(f"Skipping invalid friend ID: {friend}")
 
+        no_users = get_users_count()-no_users
+        new_users += no_users
+        print(f"{i}) Inserted {len(friends)} friends (created {no_users} Users - total new_users are {new_users})..")
+
 # Leggi il file CSV e inserisci i dati nel database
 with open('data.csv', 'r') as f:
     reader = csv.DictReader(f)
-    rows = list(reader)[:rows_limit]   # Convertiamo il reader in una lista per poterlo rileggere
+    rows = list(reader)
+    if rows_limit:
+        rows = rows[:rows_limit]   # Convertiamo il reader in una lista per poterlo rileggere
     insert_all_users(rows)
     insert_other_data(rows)
 
