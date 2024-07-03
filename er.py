@@ -72,6 +72,7 @@ def insert_user(row):
         VALUES (%s, %s, %s, %s, %s, %s)
         ON CONFLICT (userId) DO NOTHING
     """, (int(row['id']), row['screenName'], row['avatar'], int(row['followersCount']), int(row['friendsCount']), row['lang']))
+    # print(f"Inserted User: userId={row['id']}, screenName={row['screenName']}, avatar={row['avatar']}, followersCount={row['followersCount']}, followingCount={row['friendsCount']}, lang={row['lang']}")
 
 # Funzione per inserire i dati nella tabella Post
 def insert_post(row):
@@ -120,7 +121,7 @@ def insert_other_data(reader):
     for row in reader:
         insert_post(row)
 
-        tags = row['tags'].split(',')
+        tags = row['tags'].split('|')
         for tag in tags:
             insert_tag(tag)
             insert_has_tag(int(row['tweetId']), tag)
@@ -136,10 +137,24 @@ def insert_other_data(reader):
 # Leggi il file CSV e inserisci i dati nel database
 with open('data.csv', 'r') as f:
     reader = csv.DictReader(f)
-    rows = list(reader)  # Convertiamo il reader in una lista per poterlo rileggere
+    rows = list(reader)[:1000]   # Convertiamo il reader in una lista per poterlo rileggere
     insert_all_users(rows)
     insert_other_data(rows)
 
+query = """
+    SELECT *
+    FROM "User"
+"""
+
+# Esegui la query
+cur.execute(query)
+
+# Ottieni tutti i risultati
+users = cur.fetchall()
+
+# Stampa i risultati
+for user in users:
+    print(user)
 # Chiudi la comunicazione con il database PostgreSQL
 cur.close()
 conn.commit()
