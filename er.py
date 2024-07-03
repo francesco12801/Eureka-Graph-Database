@@ -1,8 +1,9 @@
-import psycopg
+import psycopg2
 import csv
 import sys
 from dotenv import load_dotenv
 import os
+
 load_dotenv()
 
 maxInt = sys.maxsize
@@ -25,14 +26,14 @@ finally:
 
 print("Connecting to database..")
 # Connessione al database PostgreSQL
-conn = psycopg.connect(
-    dbname=os.getenv('DBNAME', 'dataManagement'),
-    user=os.getenv('USER', 'postgres'),
-    password=os.getenv('PASSWORD', '2345'),
-    host=os.getenv('HOST', '127.0.0.1'),
-    port=os.getenv('PORT', '5432')
+
+conn = psycopg2.connect(
+    dbname="dataManagement",
+    user="postgres",
+    password="2345",
+    host="127.0.0.1",
+    port="5432"
 )
-# Crea un cursore
 cur = conn.cursor()
 
 # Creazione delle tabelle
@@ -40,7 +41,7 @@ commands = [
     """
     CREATE TABLE IF NOT EXISTS "User" (
         userId BIGINT PRIMARY KEY,
-        screenName VARCHAR(50) UNIQUE,
+        screenName VARCHAR(50),
         avatar VARCHAR(255),
         followersCount INT,
         followingCount INT,
@@ -91,7 +92,6 @@ def insert_user(row):
         VALUES (%s, %s, %s, %s, %s, %s)
         ON CONFLICT (userId) DO NOTHING
     """, (int(row['id']), row['screenName'], row['avatar'], int(row['followersCount']), int(row['friendsCount']), row['lang']))
-    # print(f"Inserted User: userId={row['id']}, screenName={row['screenName']}, avatar={row['avatar']}, followersCount={row['followersCount']}, followingCount={row['friendsCount']}, lang={row['lang']}")
 
 # Funzione per inserire i dati nella tabella Post
 def insert_post(row):
@@ -119,31 +119,35 @@ def insert_has_tag(postId, tag):
 
 # Funzione per inserire i dati nella tabella Follows
 def insert_follows(userId, friendId):
-    # Verifica se il friendId esiste nella tabella User
+    # Inserisci l'amico come utente se non esiste già
+    cur.execute("SELECT 1 FROM \"User\" WHERE userId = %s", (friendId,))
+    if cur.fetchone() is None:
+        # Ottieni le informazioni dell'amico dai dati disponibili
+        friend_data = {
+            'id': friendId,
+            'screenName': f"Friend_{friendId}",
+            'avatar': '',  # Inserisci un valore di default per l'avatar
+            'followersCount': 0,  # Inserisci un valore di default per i follower
+            'friendsCount': 0,  # Inserisci un valore di default per gli amici
+            'lang': 'en'  # Inserisci un valore di default per la lingua
+        }
+        insert_user(friend_data)
+
+    # Inserisci la relazione di follow
     cur.execute("""
-        SELECT 1 FROM "User" WHERE userId = %s
-    """, (friendId,))
-    if cur.fetchone():
-        cur.execute("""
-            INSERT INTO "Follows" (followerId, followedId)
-            VALUES (%s, %s)
-            ON CONFLICT (followerId, followedId) DO NOTHING
-        """, (userId, friendId))
+        INSERT INTO "Follows" (followerId, followedId)
+        VALUES (%s, %s)
+        ON CONFLICT (followerId, followedId) DO NOTHING
+    """, (userId, friendId))
 
 # Funzione per inserire tutti gli utenti
 def insert_all_users(reader):
-    print("Inserting users..")
-
-    total = 0
     for row in reader:
         insert_user(row)
-        total = total+1
-
-    print(f"Done! (Inserted {total} users)")
 
 # Funzione per inserire tutti i post, tag e relazioni di follow
 def insert_other_data(reader):
-    for i, row in enumerate(reader):
+    for row in reader:
         insert_post(row)
 
         tags = row['tags'].split('|')
@@ -152,7 +156,6 @@ def insert_other_data(reader):
             insert_has_tag(int(row['tweetId']), tag)
 
         friends = row['friends'].split('|')
-        print(f"{i}) Inserting {len(friends)} friends..")
         for friend in friends:
             if friend.strip():  # Controlla che il valore non sia vuoto
                 try:
@@ -163,26 +166,10 @@ def insert_other_data(reader):
 # Leggi il file CSV e inserisci i dati nel database
 with open('data.csv', 'r') as f:
     reader = csv.DictReader(f)
-    rows = list(reader)
-    if rows_limit:
-        rows = rows[:rows_limit]   
+    rows = list(reader)[:rows_limit]   # Convertiamo il reader in una lista per poterlo rileggere
     insert_all_users(rows)
     insert_other_data(rows)
 
-query = """
-    SELECT *
-    FROM "User"
-"""
-
-# Esegui la query
-cur.execute(query)
-
-# Ottieni tutti i risultati
-users = cur.fetchall()
-
-# Stampa i risultati
-for i, user in enumerate(users):
-    print(f"{i}) - {user}")
 # Chiudi la comunicazione con il database PostgreSQL
 cur.close()
 conn.commit()
