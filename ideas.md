@@ -30,3 +30,6 @@ Let's documentate what we're doing and what we have to do.
 We want to run these queries in both relational and graph database comparing the computational time and looking at which model should be used in realation to row entries and presence of indexes.
 
 3. Simplified visualization of graph database thanks to specific tools such as NEO4J BLOOM; allowing non tech people to quickly go through the data in an interactive way. 
+
+
+// Diagramma ER 
