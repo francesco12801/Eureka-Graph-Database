@@ -1,17 +1,36 @@
-import psycopg2
+import psycopg
 import csv
 import sys
+from dotenv import load_dotenv
+import os
+load_dotenv()
 
-# Aumenta il limite massimo dei campi CSV
-csv.field_size_limit(sys.maxsize)
+maxInt = sys.maxsize
+while True:
+    # decrease the maxInt value by factor 10 
+    # as long as the OverflowError occurs.
+    try:
+        csv.field_size_limit(maxInt)
+        break
+    except OverflowError:
+        maxInt = int(maxInt/10)
 
+rows_limit = None
+try:
+    rows_limit = int(sys.argv[1])
+except (IndexError, ValueError):
+    print("Run script by specify an integer argument to limit the csv rows - Default is 'None', no limit")
+finally:
+    print(f"Consider only {rows_limit} rows.")
+
+print("Connecting to database..")
 # Connessione al database PostgreSQL
-conn = psycopg2.connect(
-    dbname="dataManagement",
-    user="postgres",
-    password="2345",
-    host="127.0.0.1",
-    port="5432"
+conn = psycopg.connect(
+    dbname=os.getenv('DBNAME', 'dataManagement'),
+    user=os.getenv('USER', 'postgres'),
+    password=os.getenv('PASSWORD', '2345'),
+    host=os.getenv('HOST', '127.0.0.1'),
+    port=os.getenv('PORT', '5432')
 )
 # Crea un cursore
 cur = conn.cursor()
@@ -21,7 +40,7 @@ commands = [
     """
     CREATE TABLE IF NOT EXISTS "User" (
         userId BIGINT PRIMARY KEY,
-        screenName VARCHAR(50),
+        screenName VARCHAR(50) UNIQUE,
         avatar VARCHAR(255),
         followersCount INT,
         followingCount INT,
@@ -113,12 +132,18 @@ def insert_follows(userId, friendId):
 
 # Funzione per inserire tutti gli utenti
 def insert_all_users(reader):
+    print("Inserting users..")
+
+    total = 0
     for row in reader:
         insert_user(row)
+        total = total+1
+
+    print(f"Done! (Inserted {total} users)")
 
 # Funzione per inserire tutti i post, tag e relazioni di follow
 def insert_other_data(reader):
-    for row in reader:
+    for i, row in enumerate(reader):
         insert_post(row)
 
         tags = row['tags'].split('|')
@@ -127,6 +152,7 @@ def insert_other_data(reader):
             insert_has_tag(int(row['tweetId']), tag)
 
         friends = row['friends'].split('|')
+        print(f"{i}) Inserting {len(friends)} friends..")
         for friend in friends:
             if friend.strip():  # Controlla che il valore non sia vuoto
                 try:
@@ -137,7 +163,9 @@ def insert_other_data(reader):
 # Leggi il file CSV e inserisci i dati nel database
 with open('data.csv', 'r') as f:
     reader = csv.DictReader(f)
-    rows = list(reader)[:1000]   # Convertiamo il reader in una lista per poterlo rileggere
+    rows = list(reader)
+    if rows_limit:
+        rows = rows[:rows_limit]   
     insert_all_users(rows)
     insert_other_data(rows)
 
@@ -153,8 +181,8 @@ cur.execute(query)
 users = cur.fetchall()
 
 # Stampa i risultati
-for user in users:
-    print(user)
+for i, user in enumerate(users):
+    print(f"{i}) - {user}")
 # Chiudi la comunicazione con il database PostgreSQL
 cur.close()
 conn.commit()
