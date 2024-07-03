@@ -32,4 +32,3 @@ We want to run these queries in both relational and graph database comparing the
 3. Simplified visualization of graph database thanks to specific tools such as NEO4J BLOOM; allowing non tech people to quickly go through the data in an interactive way. 
 
 
-// Diagramma ER 
