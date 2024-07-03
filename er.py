@@ -1,9 +1,8 @@
 import psycopg2
 import csv
 import sys
-from dotenv import load_dotenv
 import os
-
+from dotenv import load_dotenv
 load_dotenv()
 
 maxInt = sys.maxsize
@@ -26,13 +25,12 @@ finally:
 
 print("Connecting to database..")
 # Connessione al database PostgreSQL
-
 conn = psycopg2.connect(
-    dbname="dataManagement",
-    user="postgres",
-    password="2345",
-    host="127.0.0.1",
-    port="5432"
+    dbname=os.getenv('DBNAME', 'dataManagement'),
+    user=os.getenv('USER', 'postgres'),
+    password=os.getenv('PASSWORD', '2345'),
+    host=os.getenv('HOST', '127.0.0.1'),
+    port=os.getenv('PORT', '5432')
 )
 cur = conn.cursor()
 
@@ -120,18 +118,23 @@ def insert_has_tag(postId, tag):
 # Funzione per inserire i dati nella tabella Follows
 def insert_follows(userId, friendId):
     # Inserisci l'amico come utente se non esiste già
-    cur.execute("SELECT 1 FROM \"User\" WHERE userId = %s", (friendId,))
-    if cur.fetchone() is None:
-        # Ottieni le informazioni dell'amico dai dati disponibili
-        friend_data = {
-            'id': friendId,
-            'screenName': f"Friend_{friendId}",
-            'avatar': '',  # Inserisci un valore di default per l'avatar
-            'followersCount': 0,  # Inserisci un valore di default per i follower
-            'friendsCount': 0,  # Inserisci un valore di default per gli amici
-            'lang': 'en'  # Inserisci un valore di default per la lingua
-        }
-        insert_user(friend_data)
+    # cur.execute("SELECT 1 FROM \"User\" WHERE userId = %s", (friendId,))
+    # if cur.fetchone() is None:
+    #     # Ottieni le informazioni dell'amico dai dati disponibili
+    #     friend_data = {
+    #         'id': friendId,
+    #         'screenName': f"Friend_{friendId}",
+    #         'avatar': '',  # Inserisci un valore di default per l'avatar
+    #         'followersCount': 0,  # Inserisci un valore di default per i follower
+    #         'friendsCount': 0,  # Inserisci un valore di default per gli amici
+    #         'lang': 'en'  # Inserisci un valore di default per la lingua
+    #     }
+    #     insert_user(friend_data)
+    cur.execute("""
+        INSERT INTO "User" (userId)
+        VALUES (%s)
+        ON CONFLICT (userId) DO NOTHING
+    """, (friendId,))
 
     # Inserisci la relazione di follow
     cur.execute("""

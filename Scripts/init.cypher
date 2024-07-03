@@ -9,6 +9,7 @@ CREATE CONSTRAINT UniqueTag IF NOT EXISTS FOR (t:Tag) REQUIRE t.text IS UNIQUE;
 
 // Load dataset with headers
 LOAD CSV WITH HEADERS FROM 'file:///data.csv' AS row
+WITH row LIMIT 1000
 
 // Create User nodes
 MERGE (u:User {userId: toInteger(row.id)})
@@ -29,7 +30,7 @@ ON CREATE
 // Create TWEETED relationship
 MERGE (u)-[:TWEETED]->(p)
 
-WITH row
+WITH row LIMIT 1000
 MATCH (p:Post {postId: toInteger(row.tweetId)})
 UNWIND split(row.tags, "|") as tagText
     // Create Tag nodes
