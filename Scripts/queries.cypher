@@ -1,35 +1,80 @@
-userId: 3410763455
-screenName: jdfollowhelp
+// Set parameters
+:param target_screenName => "jdfollowhelp";
+:param target_tag => "dog";
+:param target_screenName => "jdfollowhelp";
+:param k => 4;
 
-// QUERY 1: Find friend of friends of friend of friends (4) of a specific User.
-MATCH (u: User {screenName: "jdfollowhelp"})-[:FOLLOWS*4]->(n: User WHERE n.screenName IS NOT NULL)
-RETURN u,n LIMIT 100
+// 1. Get Users based on their screenName.
 
-// QUERY 2: Find most influencing Users in our social graph according to proper metrics (https://neo4j.com/docs/graph-data-science/current/algorithms/centrality/) (in general, or maybe based on a Tags)
-// QUERY 3: Get Users interested in a specific Tags
-// QUERY 4: Get most trending Tags across all Users
-// QUERY 5: Get most trending Tags across influencer Users
-// QUERY 6: Based on a User, suggest him more people to follow
-// QUERY 7: Based on a User, suggest him posts that he could be interested in
-// QUERY 8: Clusterize Tags into more general Tag - Is necessary ML ?
-// QUERY 9: Find most influencing Users in our social graph based on their follower number (compare with QUERY 2)
-// We want to run these queries in both relational and graph database comparing the computational time and looking at which model should be used in realation to row entries and presence of indexes.
-// Simplified visualization of graph database thanks to specific tools such as NEO4J BLOOM; allowing non tech people to quickly go through the data in an interactive way. 
-
-
-// QUERY 8: Find User searching its screen name
-DROP INDEX range_index_screenName
 PROFILE
-MATCH (u: User {screenName: "_notmichelle"})
+MATCH (u:User {screenName: $target_screenName})
 RETURN u
+;
 
-CREATE INDEX range_index_screenName IF NOT EXISTS FOR (u:User) ON (u.screenName)
+// ----------------------------------------------------------------------------------------------
+
+// 2. Get Posts containing a specific Tag.
+
 PROFILE
-MATCH (u: User {screenName: "_notmichelle"})
-RETURN u
+MATCH (p:Post)-[:HAS_TAG]->(t:Tag)
+WHERE t.text CONTAINS $target_tag
+RETURN p
+;
 
+// ----------------------------------------------------------------------------------------------
 
-// find peoples that follows someone and are followed by someone
+// 3. Get followers of followers of ... (up to a certain *k*-degree) of a specific User.
+
+PROFILE
+MATCH (u: User {screenName: $target_screenName})-[:FOLLOWS*$k]->(n: User WHERE n.screenName IS NOT NULL)
+RETURN n
+;
+
+// ----------------------------------------------------------------------------------------------
+
+// 4. Find top 10 most influencing Users in our social graph based on their follower number.
+PROFILE
+MATCH (u:User)
+RETURN u ORDER BY u.followersCount DESC
+LIMIT 10
+;
+
+// ----------------------------------------------------------------------------------------------
+
+// 5. Find most influencing Users in our social graph according to [centrality algorithms](https://neo4j.com/docs/graph-data-science/current/algorithms/centrality/), in general and based on a specific Tag.
+//     - Could be interesting to compare this with query #2 to identify potential differences
+
+// ----------------------------------------------------------------------------------------------
+
+// 6. Get Users interested in a specific Tag.
+
+// ----------------------------------------------------------------------------------------------
+
+// 7. Get most trending Tags across all Users.
+
+// ----------------------------------------------------------------------------------------------
+
+// 8. Get most trending Tags across most influencing Users.
+
+// ----------------------------------------------------------------------------------------------
+
+// 9. Based on a Tag, get similar Tags.
+//     - May need to clusterize Tags into more general topics or subjects - Need to understand if is ML involved
+
+// ----------------------------------------------------------------------------------------------
+
+// 10. Based on a User, suggest him more Users to follow.
+//     - Still need to understand how this could work, query #3 can help with that
+//     - **Idea**: clusterize Users into similar ones?
+
+// ----------------------------------------------------------------------------------------------
+
+// 11. Based on a User, suggest him Post that he could be interested in.
+//     - This could help populate its feed (called Timeline in X, For You in TikTok, etc.)
+
+// ----------------------------------------------------------------------------------------------
+
+// BONUS. Find Users that follows someone and are followed by someone
 MATCH (u: User)
 WITH u, COUNT {(u)-[:FOLLOWS]->()} AS out, COUNT {(u)<-[:FOLLOWS]-()} AS in
 WHERE out > 0 AND in > 0

@@ -1,6 +1,6 @@
 // Choose how many rows to import from csv file
 :param max_rows => 1000;
-:param batch_size => 50;
+:param batch_size => 200;
 
 // ----------------------------------------------------------------------------------------------
 
@@ -76,8 +76,16 @@ CALL {
     UNWIND split(row.friends, "|") as friendId
         // For every friend create a User node if it doesn't exist yet
         MERGE (f:User {userId: toInteger(friendId)})
+        ON CREATE
+            SET
+                f.followersCount=0,
+                f.followingCount=0
+
         // Create FOLLOWS relationship
         MERGE (u)-[:FOLLOWS]->(f)
+        ON CREATE
+            SET
+                f.followersCount=f.followersCount+1
 
 } IN TRANSACTIONS OF $batch_size ROWS
 ;
