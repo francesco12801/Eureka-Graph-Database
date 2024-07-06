@@ -146,9 +146,9 @@ def insert_follows(userId, friendId):
     #     }
     #     insert_user(friend_data)
     cur.execute("""
-        INSERT INTO "User" (userId)
-        VALUES (%s)
-        ON CONFLICT (userId) DO NOTHING
+        INSERT INTO "User" (userId, followersCount, followingCount)
+        VALUES (%s, 0, 0)
+        ON CONFLICT (userId) DO UPDATE SET followersCount="User".followersCount+1
     """, (friendId,))
 
     # Inserisci la relazione di follow
