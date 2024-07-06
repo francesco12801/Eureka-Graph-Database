@@ -19,7 +19,7 @@ UNWIND graphName AS gn
 // 1. Get Users based on their screenName.
 
 PROFILE
-MATCH (u:User {screenName: $target_screenName})
+MATCH (u:User {screenName: "jdfollowhelp"})
 RETURN u
 ;
 
@@ -29,7 +29,7 @@ RETURN u
 
 PROFILE
 MATCH (p:Post)-[:HAS_TAG]->(t:Tag)
-WHERE t.text CONTAINS $target_tag
+WHERE t.text CONTAINS "dog"
 RETURN p
 ;
 
@@ -38,7 +38,7 @@ RETURN p
 // 3. Get followers of followers of ... (up to a certain *k*-degree) of a specific User.
 
 PROFILE
-MATCH (u: User {screenName: $target_screenName})-[:FOLLOWS*$k]->(n: User WHERE n.screenName IS NOT NULL)
+MATCH (u: User {screenName: "jdfollowhelp"})-[:FOLLOWS*2]->(n)
 RETURN n
 ;
 
@@ -77,12 +77,6 @@ LIMIT 10
 
 // 10. Based on a User, suggest him more Users to follow (that he is not following rn).
 //     - Still need to understand how this could work, query #3 can help with that
-//     - **Idea**: clusterize Users into similar ones?
-
-
-// BEST OF THE BEST https://towardsdatascience.com/exploring-practical-recommendation-engines-in-neo4j-ff09fe767782
-// https://neo4j.com/docs/getting-started/appendix/tutorials/guide-build-a-recommendation-engine/
-// Use Similarity algorithms from gds (https://neo4j.com/docs/graph-data-science/current/algorithms/node-similarity/)
 
 // Simple User-based recommendations (Collaborative)
 PROFILE
@@ -95,6 +89,9 @@ PROFILE
 MATCH (u:User{screenName: "jdfollowhelp"})-[:TWEETED]->(p)-[:HAS_TAG]->(t)<-[:HAS_TAG]-(other_p)<-[:TWEETED]-(other_u)
 WHERE other_p <> p AND other_u <> u AND NOT (u)-[:FOLLOWS]->(other_u)
 RETURN u, p, other_p, t, other_u, LIMIT 10;
+
+
+// NOW Use Similarity algorithms from gds (https://neo4j.com/docs/graph-data-science/current/algorithms/node-similarity/)
 
 // Compute projection (needed for all gds algorithmz)
 CALL gds.graph.project(
@@ -130,19 +127,6 @@ WHERE NOT (n1)-[:FOLLOWS]->(n2)
 RETURN n1, n2, similarity, exists((n1)-[:FOLLOWS]->(n2)) AS already_following
 ORDER BY similarity DESC
 
-// VERSION 2 (should be slower)
-// CALL gds.nodeSimilarity.stream(
-//     'myGraph',
-//     {
-//         topK: 50
-//     }
-// )
-// YIELD node1, node2, similarity
-// WITH gds.util.asNode(node1) AS n1, gds.util.asNode(node2) AS n2, similarity
-// WHERE n1.screenName = "jdfollowhelp" AND NOT (n1)-[:FOLLOWS]->(n2)
-// RETURN n1, n2, similarity, exists((n1)-[:FOLLOWS]->(n2)) AS already_following
-// ORDER BY similarity DESC
-
 // Remove created projection
 CALL gds.graph.drop(
     'myGraph'
@@ -153,12 +137,6 @@ YIELD graphName, nodeCount, relationshipCount;
 
 // 11. Based on a User, suggest him Post that he could be interested in.
 //     - This could help populate its feed (called Timeline in X, For You in TikTok, etc.)
-// Use Similarity algorithms from gds (https://neo4j.com/docs/graph-data-science/current/algorithms/node-similarity/)
-
-// https://utsavdesai26.medium.com/recommendation-systems-explained-understanding-the-basic-to-advance-43a5fce77c47
-// https://stackoverflow.com/questions/16372191/whats-difference-between-item-based-and-content-based-collaborative-filtering
-// https://graphaware.com/hume/2021/08/18/whisky-recommendation-graph.html
-// https://medium.com/kellton-europe/building-a-recommendation-system-using-neo4j-3baaf349e7
 
 // Simple User-based recommendations (Collaborative)
 MATCH (u:User{screenName: "jdfollowhelp"})-[:FOLLOWS]->(other_u)-[:TWEETED]->(p)
@@ -169,10 +147,16 @@ MATCH (u:User{screenName: "jdfollowhelp"})-[:TWEETED]->(p)-[:HAS_TAG]->(t)<-[:HA
 WHERE other_p <> p
 RETURN u, p, other_p, t
 
-
+// https://utsavdesai26.medium.com/recommendation-systems-explained-understanding-the-basic-to-advance-43a5fce77c47
+// https://stackoverflow.com/questions/16372191/whats-difference-between-item-based-and-content-based-collaborative-filtering
+// https://graphaware.com/hume/2021/08/18/whisky-recommendation-graph.html
+// https://medium.com/kellton-europe/building-a-recommendation-system-using-neo4j-3baaf349e7
+// https://neo4j.com/docs/getting-started/appendix/tutorials/guide-build-a-recommendation-engine/
 
 // BEST ONE
 // https://medium.com/larus-team/how-to-create-recommendation-engine-in-neo4j-7963e635c730
+// BEST OF THE BEST
+// https://towardsdatascience.com/exploring-practical-recommendation-engines-in-neo4j-ff09fe767782
 
 // DIFFERENT WAYS
 // Item-based recommendations (or Item-Item Collaborative Filtering/Content-Based Filtering)
@@ -190,8 +174,6 @@ RETURN u, p, other_p, t
 // 3. Popularity
 // 4. Freshness
 // 5. Diversity
-
-
 
 // Compute projection (needed for all gds algorithmz)
 CALL gds.graph.project(
@@ -218,19 +200,6 @@ YIELD node1, node2, similarity
 WITH gds.util.asNode(node1) AS n1, gds.util.asNode(node2) AS n2, similarity
 RETURN n1, n2, similarity, exists((n1)-[:FOLLOWS]->(n2)) AS already_following
 ORDER BY similarity DESC
-
-// VERSION 2 (should be slower)
-// CALL gds.nodeSimilarity.stream(
-//     'myGraph',
-//     {
-//         topK: 50
-//     }
-// )
-// YIELD node1, node2, similarity
-// WITH gds.util.asNode(node1) AS n1, gds.util.asNode(node2) AS n2, similarity
-// WHERE n1.screenName = "jdfollowhelp" AND NOT (n1)-[:FOLLOWS]->(n2)
-// RETURN n1, n2, similarity, exists((n1)-[:FOLLOWS]->(n2)) AS already_following
-// ORDER BY similarity DESC
 
 // Remove created projection
 CALL gds.graph.drop(
