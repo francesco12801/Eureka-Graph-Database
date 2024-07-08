@@ -80,9 +80,35 @@ LIMIT 10
 
 // Simple User-based recommendations (Collaborative)
 PROFILE
-MATCH p=(u:User{screenName: "jdfollowhelp"})-[:FOLLOWS*2..5]->(other_u)
-WHERE NOT (u)-[:FOLLOWS]->(other_u)
+MATCH p=(u:User{screenName: "jdfollowhelp"})-[:FOLLOWS*2..3]->(other_u)
+WHERE NOT (u)-[:FOLLOWS]->(other_u) AND u <> other_u
 RETURN u, other_u, count(other_u) AS frequency, length(p) AS hops ORDER BY hops ASC, frequency DESC LIMIT 20;
+
+// // in sql
+// SELECT FRIEND OF FRIEND OF "ANTO" as fof
+// group by id
+// where fof.id != ANTO.id AND fof.hops >= 2
+// RETURN id, count(id) as frequency, fof.hops
+// ORDER BY fof.hops ASC, frequency DESC  
+
+// antonio -> fra, davide, umberto
+// fra -> mario, fabio
+// davide -> mario, giada
+// umberto -> anto, fra, davide
+
+// FRIENDS
+// fra 1
+// davide 1
+// umberto 1
+
+// FOF
+// mario, 1+1=2
+// fabio, 1+1=2
+// mario, 2
+// giada, 1+1=2
+// anto, 0
+// fra, 1<(1+1)=2, 1
+// davide, 1<(1+1)=2, 1
 
 // Simple Item-based recommendations (Content)
 PROFILE
@@ -91,7 +117,18 @@ WHERE other_p <> p AND other_u <> u AND NOT (u)-[:FOLLOWS]->(other_u)
 RETURN u, p, other_p, t, other_u, LIMIT 10;
 
 
+
+
+
+
+
 // NOW Use Similarity algorithms from gds (https://neo4j.com/docs/graph-data-science/current/algorithms/node-similarity/)
+// Similarity algorithm just count numbers of outgoing edges in a relationship so it may not be the best scenario
+
+
+
+
+
 
 // Compute projection (needed for all gds algorithmz)
 CALL gds.graph.project(
@@ -157,6 +194,8 @@ RETURN u, p, other_p, t
 // https://medium.com/larus-team/how-to-create-recommendation-engine-in-neo4j-7963e635c730
 // BEST OF THE BEST
 // https://towardsdatascience.com/exploring-practical-recommendation-engines-in-neo4j-ff09fe767782
+
+// https://neo4j.com/docs/graph-data-science-client/current/tutorials/fastrp-and-knn/
 
 // DIFFERENT WAYS
 // Item-based recommendations (or Item-Item Collaborative Filtering/Content-Based Filtering)

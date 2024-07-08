@@ -66,13 +66,15 @@ def get_followers(user_id):
     return followers[0]
 
 # 4. Count all friends of friends
-def count_friends_of_friends(user_id):
+def count_friends_of_friends(screenName):
     cur.execute("""
-        SELECT COUNT(DISTINCT f2.followedId)
-        FROM "Follows" f1
-        JOIN "Follows" f2 ON f1.followedId = f2.followerId
-        WHERE f1.followerId = %s AND f2.followedId != %s;
-    """, (user_id, user_id))
+        SELECT u2."User" AS fof
+        FROM "User" u1 
+        JOIN "Follows" uf1 ON u1.userId = uf1.followerId
+        JOIN "Follows" uf2 ON uf1.followedId = uf2.followerId
+        JOIN "User" u2 ON uf2.followedId = u2.userId
+        WHERE u1.screenName = %s AND uf2.followedId != u1.userId;
+    """, (screenName,))
     result = cur.fetchone()
     return result[0] if result else 0
 
