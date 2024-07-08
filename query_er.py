@@ -65,18 +65,120 @@ def get_followers(user_id):
     followers = cur.fetchone()
     return followers[0]
 
+def FoF(username): 
+    cur.execute='''
+    SELECT f2.User as FOF
+    FROM User u1 JOIN Follows 
+'''
+
 # 4. Count all friends of friends
-def count_friends_of_friends(screenName):
+def count_friends_of_friends(user_id):
     cur.execute("""
-        SELECT u2."User" AS fof
+        SELECT COUNT(DISTINCT f2.followedId)
+        FROM "Follows" f1
+        JOIN "Follows" f2 ON f1.followedId = f2.followerId
+        WHERE f1.followerId = %s AND f2.followedId != %s;
+    """, (user_id, user_id))
+    result = cur.fetchone()
+    return result[0] if result else 0
+
+
+def suggest_post_itemBased(screenName):
+    return
+
+def suggest_post_itemBased(screenName):
+    return
+
+def suggest_users_itemBased(screenName):
+    cur.execute("""      
+        SELECT DISTINCT u.screenName AS originalUser,
+                p.postId AS originalPost,
+                other_p.postId AS otherPost,
+                t.text AS tag,
+                other_u.screenName AS otherUser
+        FROM "User" u
+        JOIN "Post" p ON u.userId = p.userId
+        JOIN "Has_Tag" ht1 ON p.postId = ht1.postId
+        JOIN "Tag" t ON ht1.tagText = t.text
+        JOIN "Has_Tag" ht2 ON t.text = ht2.tagText
+        JOIN "Post" other_p ON ht2.postId = other_p.postId
+        JOIN "User" other_u ON other_p.userId = other_u.userId
+        LEFT JOIN "Follows" f ON u.userId = f.followerId AND other_u.userId = f.followedId
+        WHERE u.screenName = %s
+        AND other_p.postId <> p.postId
+        AND other_u.userId <> u.userId
+        AND f.followedId IS NULL
+        LIMIT 10;
+
+
+    """,(screenName,))
+    return cur.fetchall() 
+    
+
+
+
+
+def suggest_users_userBased(screenName):
+    # Amici diretti (distanza 1)
+    cur.execute("""
+        SELECT uf1.followedId AS userId
+        FROM "User" u1
+        JOIN "Follows" uf1 ON u1.userId = uf1.followerId
+        WHERE u1.screenName = %s;
+    """, (screenName,))
+    direct_friends = cur.fetchall()
+    direct_friend_ids = {friend[0] for friend in direct_friends}
+
+    # Amici degli amici (distanza 2)
+    cur.execute("""
+        SELECT u2.userId AS userId, 2 AS distance, COUNT(*) AS paths
+        FROM "User" u1
+        JOIN "Follows" uf1 ON u1.userId = uf1.followerId
+        JOIN "Follows" uf2 ON uf1.followedId = uf2.followerId
+        JOIN "User" u2 ON uf2.followedId = u2.userId
+        WHERE u1.screenName = %s AND uf2.followedId != u1.userId
+        GROUP BY u2.userId;
+    """, (screenName,))
+    fof_distance_2 = [row for row in cur.fetchall() if row[0] not in direct_friend_ids]
+
+    # Amici degli amici degli amici (distanza 3)
+    cur.execute("""
+        SELECT u3.userId AS userId, 3 AS distance, COUNT(*) AS paths
+        FROM "User" u1
+        JOIN "Follows" uf1 ON u1.userId = uf1.followerId
+        JOIN "Follows" uf2 ON uf1.followedId = uf2.followerId
+        JOIN "Follows" uf3 ON uf2.followedId = uf3.followerId
+        JOIN "User" u3 ON uf3.followedId = u3.userId
+        WHERE u1.screenName = %s AND uf3.followedId != u1.userId
+        GROUP BY u3.userId;
+    """, (screenName,))
+    fof_distance_3 = [row for row in cur.fetchall() if row[0] not in direct_friend_ids]
+
+    # Combina i risultati
+    result = fof_distance_2 + fof_distance_3
+
+    # Ordina per distanza ascendente e per numero di percorsi discendente
+    result_sorted = sorted(result, key=lambda x: (x[1], -x[2]))
+
+    # Limita i risultati a 20
+    result_limited = result_sorted[:20]
+
+    return result_limited
+
+
+
+
+def get_FOF(screenName):
+    cur.execute("""
+        SELECT u2.userId AS fof
         FROM "User" u1 
         JOIN "Follows" uf1 ON u1.userId = uf1.followerId
         JOIN "Follows" uf2 ON uf1.followedId = uf2.followerId
         JOIN "User" u2 ON uf2.followedId = u2.userId
         WHERE u1.screenName = %s AND uf2.followedId != u1.userId;
     """, (screenName,))
-    result = cur.fetchone()
-    return result[0] if result else 0
+    result = cur.fetchall()
+    return result
 
 # 5. Get top 10 most influencing Users in our social graph based on their follower number
 def get_top_influencing_users():
@@ -239,16 +341,22 @@ def plot_followers_of_followers_times(user_id, max_k):
     plt.show()
 
 try: 
-    print("Followers of user 1393409100:", get_followers("1393409100"))
-    print("Users with screenname '_notmichelle':", get_users_by_screenname("_notmichelle"))
-    print(get_posts_by_tag("#nationaldogday"))
-    print("Friends of friends of user 1393409100:", count_friends_of_friends(461669641))
-    print("First 100 User IDs:", get_first_100_users())
-    print("Top 10 Influencing Users:", get_top_influencing_users())
+    # print("Followers of user 1393409100:", get_followers("1393409100"))
+    # print("Users with screenname '_notmichelle':", get_users_by_screenname("_notmichelle"))
+    # print(get_posts_by_tag("#nationaldogday"))
+    # print("Friends of friends of user 1393409100:", count_friends_of_friends(461669641))
+    # print("First 100 User IDs:", get_first_100_users())
+    print("Suggest User Item-Based: ", suggest_users_itemBased("jdfollowhelp"))
+    # print("Top 10 Influencing Users:", get_top_influencing_users())
     print("Most Trending Tags:", get_most_trending_tags())
-    print("Most Trending Tags across Influencer:", get_trending_tags_among_influencers())
-    print("Suggest User:", suggest_users_to_follow(1393409100))
-
+    # print("Most Trending Tags across Influencer:", get_trending_tags_among_influencers())
+    # print("Suggest User:", suggest_users_to_follow(1393409100))
+    # print("FOF: ", get_FOF('jdfollowhelp'))
+    screen_name = 'jdfollowhelp'
+    fof_with_distance_and_paths = suggest_users_userBased(screen_name)
+    for userId, distance, paths in fof_with_distance_and_paths:
+        print(f"UserId: {userId}, Distance: {distance}, Paths: {paths}")
+    
     show_execution_time = input("Do you want to see the execution time? (y/n): ")
     # Check the user's response
     if show_execution_time.lower() == "y":
