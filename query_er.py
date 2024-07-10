@@ -1,15 +1,24 @@
 import matplotlib.pyplot as plt
-import psycopg2
+import psycopg
 import csv
 import sys
 from datetime import datetime
 import os
 from dotenv import load_dotenv
 import time
+import timeit
 load_dotenv()
 
 # Aumenta il limite massimo dei campi CSV
-csv.field_size_limit(sys.maxsize)
+maxInt = sys.maxsize
+while True:
+    # decrease the maxInt value by factor 10 
+    # as long as the OverflowError occurs.
+    try:
+        csv.field_size_limit(maxInt)
+        break
+    except OverflowError:
+        maxInt = int(maxInt/10)
 
 # Connessione al database PostgreSQL
 print("Connecting to database..")
@@ -19,19 +28,172 @@ PASSWORD=os.getenv('PASSWORD', '2345')
 HOST=os.getenv('HOST', '127.0.0.1')
 PORT=os.getenv('PORT', '5432')
 
-conn = psycopg2.connect(
-    dbname="dataManagement",
-    user="postgres",
-    password="2345",
-    host="127.0.0.1",
-    port="5432"
+conn = psycopg.connect(
+    # dbname="dataManagement",
+    # user="postgres",
+    # password="2345",
+    # host="127.0.0.1",
+    # port="5432",
+    dbname=DBNAME,
+    user=USER,
+    password=PASSWORD,
+    host=HOST,
+    port=PORT
 )
 
 print(f"Done! '{USER}' has connected to '{DBNAME}' at {HOST}:{PORT}")
 cur = conn.cursor()
 
+# 1. Find top 10 most influencing Users in our social graph.
+def get_top_influencing_users(limit=10):
+    # cur.execute("""
+    #     SELECT u.userId, u.screenName, COUNT(f.followedId) AS follower_count
+    #     FROM "User" u
+    #     LEFT JOIN "Follows" f ON u.userId = f.followedId
+    #     GROUP BY u.userId, u.screenName
+    #     ORDER BY follower_count DESC
+    #     LIMIT 10;
+    # """)
+
+    cur.execute("""
+        SELECT u.userId, u.screenName, u.followersCount
+        FROM "User" u
+        ORDER BY u.followersCount DESC
+        LIMIT %s;
+    """, (limit,))
+
+    return cur.fetchall()
+
+# 2. Get most trending Tags across all Users.
+def get_most_trending_tags(limit=10):
+    cur.execute("""
+        SELECT ht.tagText, COUNT(*) AS tag_count
+        FROM "Has_Tag" ht
+        JOIN "Post" p ON ht.postId = p.postId
+        GROUP BY ht.tagText
+        ORDER BY tag_count DESC
+        LIMIT %s;
+    """, (limit,))
+    return cur.fetchall()
+
+# 3. Based on a User, suggest him more Users to follow (that he is not following rn).
+#  a. Simple User-based recommendations (Collaborative Filtering)
+def suggest_users_itemBased(screenName, limit=10):
+    cur.execute("""      
+        SELECT DISTINCT u.screenName AS originalUser,
+                p.postId AS originalPost,
+                other_p.postId AS otherPost,
+                t.text AS tag,
+                other_u.screenName AS otherUser
+        FROM "User" u
+        JOIN "Post" p ON u.userId = p.userId
+        JOIN "Has_Tag" ht1 ON p.postId = ht1.postId
+        JOIN "Tag" t ON ht1.tagText = t.text
+        JOIN "Has_Tag" ht2 ON t.text = ht2.tagText
+        JOIN "Post" other_p ON ht2.postId = other_p.postId
+        JOIN "User" other_u ON other_p.userId = other_u.userId
+        LEFT JOIN "Follows" f ON u.userId = f.followerId AND other_u.userId = f.followedId
+        WHERE u.screenName = %s
+        AND other_p.postId <> p.postId
+        AND other_u.userId <> u.userId
+        AND f.followedId IS NULL
+        LIMIT %s;
+    """,(screenName, limit))
+    return cur.fetchall() 
+
+#  b. Simple Item-based reccomentations (Content-Based)
+def suggest_users_userBased(screenName, limit=10):
+    # Amici diretti (distanza 1)
+    cur.execute("""
+        SELECT uf1.followedId AS userId
+        FROM "User" u1
+        JOIN "Follows" uf1 ON u1.userId = uf1.followerId
+        WHERE u1.screenName = %s;
+    """, (screenName,))
+    direct_friends = cur.fetchall()
+    direct_friend_ids = {friend[0] for friend in direct_friends}
+
+    # Amici degli amici (distanza 2)
+    cur.execute("""
+        SELECT u2.userId AS userId, 2 AS distance, COUNT(*) AS paths
+        FROM "User" u1
+        JOIN "Follows" uf1 ON u1.userId = uf1.followerId
+        JOIN "Follows" uf2 ON uf1.followedId = uf2.followerId
+        JOIN "User" u2 ON uf2.followedId = u2.userId
+        WHERE u1.screenName = %s AND uf2.followedId != u1.userId
+        GROUP BY u2.userId;
+    """, (screenName,))
+    fof_distance_2 = [row for row in cur.fetchall() if row[0] not in direct_friend_ids]
+
+    # Amici degli amici degli amici (distanza 3)
+    cur.execute("""
+        SELECT u3.userId AS userId, 3 AS distance, COUNT(*) AS paths
+        FROM "User" u1
+        JOIN "Follows" uf1 ON u1.userId = uf1.followerId
+        JOIN "Follows" uf2 ON uf1.followedId = uf2.followerId
+        JOIN "Follows" uf3 ON uf2.followedId = uf3.followerId
+        JOIN "User" u3 ON uf3.followedId = u3.userId
+        WHERE u1.screenName = %s AND uf3.followedId != u1.userId
+        GROUP BY u3.userId;
+    """, (screenName,))
+    fof_distance_3 = [row for row in cur.fetchall() if row[0] not in direct_friend_ids]
+
+    # Combina i risultati
+    result = fof_distance_2 + fof_distance_3
+
+    # Ordina per distanza ascendente e per numero di percorsi discendente
+    result_sorted = sorted(result, key=lambda x: (x[1], -x[2]))
+
+    # Limita i risultati a limit
+    result_limited = result_sorted[:limit]
+
+    return result_limited
+
+# 4. Based on a User, suggest him Posts that he could be interested in.
+#  a. Simple User-based recommendations (Collaborative Filtering)
+def suggest_post_userBased(screenName, limit=10):
+    cur.execute("""
+        SELECT 
+        p.postId AS post,
+        other_u.screenName AS otherUser
+        FROM "User" u
+        JOIN "Follows" f ON u.userId = f.followerId
+        JOIN "User" other_u ON f.followedId = other_u.userId
+        JOIN "Post" p ON other_u.userId = p.userId
+        WHERE u.screenName = %s
+        LIMIT %s;
+    """,(screenName, limit))
+    return cur.fetchall()
+
+#  b. Simple Item-based reccomentations (Content)
+def suggest_post_itemBased(screenName, limit=10):
+    cur.execute("""
+        SELECT other_p.postId AS otherPost,
+        t.text AS tag
+        FROM "User" u
+        JOIN "Post" p ON u.userId = p.userId
+        JOIN "Has_Tag" ht1 ON p.postId = ht1.postId
+        JOIN "Tag" t ON ht1.tagText = t.text
+        JOIN "Has_Tag" ht2 ON t.text = ht2.tagText
+        JOIN "Post" other_p ON ht2.postId = other_p.postId
+        WHERE u.screenName = %s
+        AND other_p.postId <> p.postId
+        LIMIT %s;
+
+    """,(screenName, limit))
+    return cur.fetchall()
+
+# ----------------------------------------------------------------------------------------------
+
 # Misurare e stampare il tempo di esecuzione di ogni query
 def measure_time(func, *args):
+    n = 10
+    result = timeit.timeit(lambda: func(*args), setup='pass', globals=globals(), number=n)
+
+    # calculate the execution time
+    return result / n
+
+
     start_time = time.time()
     result = func(*args)
     elapsed_time = time.time() - start_time
@@ -82,116 +244,6 @@ def count_friends_of_friends(user_id):
     result = cur.fetchone()
     return result[0] if result else 0
 
-
-def suggest_post_userBased(screenName):
-    cur.execute("""
-
-        SELECT 
-        p.postId AS post,
-        other_u.screenName AS otherUser
-        FROM "User" u
-        JOIN "Follows" f ON u.userId = f.followerId
-        JOIN "User" other_u ON f.followedId = other_u.userId
-        JOIN "Post" p ON other_u.userId = p.userId
-        WHERE u.screenName = %s
-        LIMIT 10;
-    """,(screenName,))
-    return cur.fetchall()
-
-def suggest_post_itemBased(screenName):
-    cur.execute("""
-        SELECT other_p.postId AS otherPost,
-        t.text AS tag
-        FROM "User" u
-        JOIN "Post" p ON u.userId = p.userId
-        JOIN "Has_Tag" ht1 ON p.postId = ht1.postId
-        JOIN "Tag" t ON ht1.tagText = t.text
-        JOIN "Has_Tag" ht2 ON t.text = ht2.tagText
-        JOIN "Post" other_p ON ht2.postId = other_p.postId
-        WHERE u.screenName = %s
-        AND other_p.postId <> p.postId
-        LIMIT 10;
-
-    """,(screenName,))
-    return cur.fetchall()
-
-def suggest_users_itemBased(screenName):
-    cur.execute("""      
-        SELECT DISTINCT u.screenName AS originalUser,
-                p.postId AS originalPost,
-                other_p.postId AS otherPost,
-                t.text AS tag,
-                other_u.screenName AS otherUser
-        FROM "User" u
-        JOIN "Post" p ON u.userId = p.userId
-        JOIN "Has_Tag" ht1 ON p.postId = ht1.postId
-        JOIN "Tag" t ON ht1.tagText = t.text
-        JOIN "Has_Tag" ht2 ON t.text = ht2.tagText
-        JOIN "Post" other_p ON ht2.postId = other_p.postId
-        JOIN "User" other_u ON other_p.userId = other_u.userId
-        LEFT JOIN "Follows" f ON u.userId = f.followerId AND other_u.userId = f.followedId
-        WHERE u.screenName = %s
-        AND other_p.postId <> p.postId
-        AND other_u.userId <> u.userId
-        AND f.followedId IS NULL
-        LIMIT 10;
-    """,(screenName,))
-    return cur.fetchall() 
-    
-
-
-
-
-def suggest_users_userBased(screenName):
-    # Amici diretti (distanza 1)
-    cur.execute("""
-        SELECT uf1.followedId AS userId
-        FROM "User" u1
-        JOIN "Follows" uf1 ON u1.userId = uf1.followerId
-        WHERE u1.screenName = %s;
-    """, (screenName,))
-    direct_friends = cur.fetchall()
-    direct_friend_ids = {friend[0] for friend in direct_friends}
-
-    # Amici degli amici (distanza 2)
-    cur.execute("""
-        SELECT u2.userId AS userId, 2 AS distance, COUNT(*) AS paths
-        FROM "User" u1
-        JOIN "Follows" uf1 ON u1.userId = uf1.followerId
-        JOIN "Follows" uf2 ON uf1.followedId = uf2.followerId
-        JOIN "User" u2 ON uf2.followedId = u2.userId
-        WHERE u1.screenName = %s AND uf2.followedId != u1.userId
-        GROUP BY u2.userId;
-    """, (screenName,))
-    fof_distance_2 = [row for row in cur.fetchall() if row[0] not in direct_friend_ids]
-
-    # Amici degli amici degli amici (distanza 3)
-    cur.execute("""
-        SELECT u3.userId AS userId, 3 AS distance, COUNT(*) AS paths
-        FROM "User" u1
-        JOIN "Follows" uf1 ON u1.userId = uf1.followerId
-        JOIN "Follows" uf2 ON uf1.followedId = uf2.followerId
-        JOIN "Follows" uf3 ON uf2.followedId = uf3.followerId
-        JOIN "User" u3 ON uf3.followedId = u3.userId
-        WHERE u1.screenName = %s AND uf3.followedId != u1.userId
-        GROUP BY u3.userId;
-    """, (screenName,))
-    fof_distance_3 = [row for row in cur.fetchall() if row[0] not in direct_friend_ids]
-
-    # Combina i risultati
-    result = fof_distance_2 + fof_distance_3
-
-    # Ordina per distanza ascendente e per numero di percorsi discendente
-    result_sorted = sorted(result, key=lambda x: (x[1], -x[2]))
-
-    # Limita i risultati a 20
-    result_limited = result_sorted[:20]
-
-    return result_limited
-
-
-
-
 def get_FOF(screenName):
     cur.execute("""
         SELECT u2.userId AS fof
@@ -203,30 +255,6 @@ def get_FOF(screenName):
     """, (screenName,))
     result = cur.fetchall()
     return result
-
-# 5. Get top 10 most influencing Users in our social graph based on their follower number
-def get_top_influencing_users():
-    cur.execute("""
-        SELECT u.userId, u.screenName, COUNT(f.followedId) AS follower_count
-        FROM "User" u
-        LEFT JOIN "Follows" f ON u.userId = f.followedId
-        GROUP BY u.userId, u.screenName
-        ORDER BY follower_count DESC
-        LIMIT 10;
-    """)
-    return cur.fetchall()
-
-# 6. Get most trending Tags across all Users
-def get_most_trending_tags():
-    cur.execute("""
-        SELECT ht.tagText, COUNT(*) AS tag_count
-        FROM "Has_Tag" ht
-        JOIN "Post" p ON ht.postId = p.postId
-        GROUP BY ht.tagText
-        ORDER BY tag_count DESC
-        LIMIT 10;
-    """)
-    return cur.fetchall()
 
 # 7. Get most trending Tags across most influencing Users
 def get_trending_tags_among_influencers():
@@ -307,17 +335,26 @@ def get_followers_of_followers(user_id, k):
     return list(all_followers)
 
 def calculate_time():
+    screen_name = 'jdfollowhelp'
+    limit = 10
+
     queries = [
-        (get_followers, "1393409100"),
-        (get_users_by_screenname, "_notmichelle"),
-        (get_posts_by_tag, "#nationaldogday"),
-        (count_friends_of_friends, 461669641),
-        (get_followers_of_followers, 461669641, 5),
-        (get_first_100_users,),
-        (get_top_influencing_users,),
-        (get_most_trending_tags,),
-        (get_trending_tags_among_influencers,),
-        (suggest_users_to_follow, 1393409100)
+        # (get_followers, "1393409100"),
+        # (get_users_by_screenname, "_notmichelle"),
+        # (get_posts_by_tag, "#nationaldogday"),
+        # (count_friends_of_friends, 461669641),
+        # (get_followers_of_followers, 461669641, 5),
+        # (get_first_100_users,),
+        # (get_top_influencing_users,),
+        # (get_most_trending_tags,),
+        # (get_trending_tags_among_influencers,),
+        # (suggest_users_to_follow, 1393409100)
+        (get_top_influencing_users, limit),
+        (get_most_trending_tags, limit),
+        (suggest_users_userBased, screen_name, limit),
+        (suggest_users_itemBased, screen_name, limit),
+        (suggest_post_userBased, screen_name, limit),
+        (suggest_post_itemBased, screen_name, limit),
     ]
     
     execution_times = []
@@ -325,7 +362,7 @@ def calculate_time():
     for query in queries:
         func = query[0]
         args = query[1:]
-        elapsed_time, _ = measure_time(func, *args)
+        elapsed_time = measure_time(func, *args)
         execution_times.append((func.__name__, elapsed_time))
     
     return execution_times
@@ -364,32 +401,70 @@ def plot_followers_of_followers_times(user_id, max_k):
     plt.grid(True)
     plt.show()
 
+# ----------------------------------------------------------------------------------------------
+
 try: 
     # print("Followers of user 1393409100:", get_followers("1393409100"))
     # print("Users with screenname '_notmichelle':", get_users_by_screenname("_notmichelle"))
     # print(get_posts_by_tag("#nationaldogday"))
     # print("Friends of friends of user 1393409100:", count_friends_of_friends(461669641))
-    print("First 100 User IDs:", get_first_100_users())
-    print("Suggest Post User-Based: ", suggest_post_userBased("jdfollowhelp"))
-    print("Suggest Post Item-Based: ", suggest_post_itemBased("jdfollowhelp"))
-    #print("Suggest User Item-Based: ", suggest_users_itemBased("jdfollowhelp"))
-    # print("Top 10 Influencing Users:", get_top_influencing_users())
-    #print("Most Trending Tags:", get_most_trending_tags())
+    # print("First 100 User IDs:", get_first_100_users())
     # print("Most Trending Tags across Influencer:", get_trending_tags_among_influencers())
     # print("Suggest User:", suggest_users_to_follow(1393409100))
     # print("FOF: ", get_FOF('jdfollowhelp'))
+
     screen_name = 'jdfollowhelp'
-    fof_with_distance_and_paths = suggest_users_userBased(screen_name)
-    for userId, distance, paths in fof_with_distance_and_paths:
-        print(f"UserId: {userId}, Distance: {distance}, Paths: {paths}")
+    limit = 10
+
+    print("----------------------------------------------------------------------------------------------")
+
+    # 1. Find top 10 most influencing Users in our social graph.
+    print("Top Influencing Users:")
+    for r in get_top_influencing_users(limit):
+        print(r)
+
+    print("----------------------------------------------------------------------------------------------")
+
+    # 2. Get most trending Tags across all Users.
+    print("Most Trending Tags:")
+    for r in get_most_trending_tags(limit):
+        print(r)
+
+    print("----------------------------------------------------------------------------------------------")
+
+    # 3. Based on a User, suggest him more Users to follow (that he is not following rn).
+    #  a. Simple User-based recommendations (Collaborative Filtering)ù
+    print("Suggest User User-Based: ")
+    suggested_users_userBased = suggest_users_userBased(screen_name, limit)
+    for userId, distance, frequency in suggested_users_userBased:
+        print(f"UserId: {userId}, Distance: {distance}, Frequency: {frequency}")
+    #  b. Simple Item-based reccomentations (Content-Based)
+    print("\nSuggest User Item-Based: ")
+    for r in suggest_users_itemBased(screen_name, limit):
+        print(r)
+
+    print("----------------------------------------------------------------------------------------------")
+
+    # 4. Based on a User, suggest him Posts that he could be interested in.
+    #  a. Simple User-based recommendations (Collaborative Filtering)
+    print("Suggest Post User-Based: ")
+    for r in suggest_post_userBased(screen_name, limit):
+        print(r)
+    #  b. Simple Item-based reccomentations (Content)
+    print("\nSuggest Post Item-Based: ")
+    for r in suggest_post_itemBased(screen_name, limit):
+        print(r)
+
+    print("----------------------------------------------------------------------------------------------")
     
     show_execution_time = input("Do you want to see the execution time? (y/n): ")
     # Check the user's response
     if show_execution_time.lower() == "y":
         execution_times = calculate_time()
+        print(execution_times)
         plot_execution_times(execution_times)
-        plot_followers_of_followers_times(461669641, 10)  
-        plot_trending_tags(get_most_trending_tags())
+        # plot_followers_of_followers_times(461669641, 10)  
+        # plot_trending_tags(get_most_trending_tags())
 
     else:
         print("Execution time not shown.")
