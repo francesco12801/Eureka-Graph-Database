@@ -1,6 +1,5 @@
 // Choose how many rows to import from csv file
-:param max_rows => 1000;
-:param batch_size => 200;
+:param batch_size => 100;
 
 // ----------------------------------------------------------------------------------------------
 
@@ -28,7 +27,7 @@ CREATE TEXT INDEX text_index_Tag_text IF NOT EXISTS FOR (t:Tag) ON (t.text);
 // ----------------------------------------------------------------------------------------------
 
 LOAD CSV WITH HEADERS FROM 'file:///data.csv' AS row
-WITH row LIMIT $max_rows
+WITH row
 
 // Create User nodes
 MERGE (u:User {userId: toInteger(row.id)})
@@ -53,7 +52,7 @@ MERGE (u)-[:TWEETED]->(p)
 // ----------------------------------------------------------------------------------------------
 
 LOAD CSV WITH HEADERS FROM 'file:///data.csv' AS row
-WITH row LIMIT $max_rows
+WITH row
 MATCH (p:Post {postId: toInteger(row.tweetId)})
 UNWIND split(row.tags, "|") as tagText
     // Create Tag nodes
@@ -65,7 +64,7 @@ UNWIND split(row.tags, "|") as tagText
 // ----------------------------------------------------------------------------------------------
 
 :auto LOAD CSV WITH HEADERS FROM 'file:///data.csv' AS row
-WITH row LIMIT $max_rows
+WITH row
 
 // Execute in batches of $batch_size rows
 CALL {
@@ -94,7 +93,7 @@ CALL {
 // ----------------------------------------------------------------------------------------------
 
 LOAD CSV WITH HEADERS FROM 'file:///data.csv' AS row
-WITH row LIMIT $max_rows
+WITH row
 
 // Reload user to set correct followersCount
 MATCH (u:User {userId: toInteger(row.id)})

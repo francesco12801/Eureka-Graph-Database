@@ -1,7 +1,7 @@
 // 1. Find top 10 most influencing Users in our social graph.
 // - based on their follower number.
 MATCH (u: User)
-RETURN u ORDER BY u.followersCount DESC LIMIT 10;
+RETURN u, u.followersCount ORDER BY u.followersCount DESC LIMIT 10;
 
 // ----------------------------------------------------------------------------------------------
 
@@ -35,3 +35,10 @@ RETURN u, p, other_u LIMIT 10;
 MATCH (u:User{screenName: "jdfollowhelp"})-[:TWEETED]->(p)-[:HAS_TAG]->(t)<-[:HAS_TAG]-(other_p)
 WHERE other_p <> p
 RETURN u, p, other_p, t LIMIT 10;
+
+// --------------------------------------------------------------------------------------------
+// CHECK FOR INCONSISTENCY BETWEEN # OF OUTGOING :FOLLOW EDGES AND FOLLOWINGCOUNT
+MATCH (u: User)-[:FOLLOWS]->(p: User)
+WITH u, COUNT(p) AS count
+WHERE u.followingCount-count>=1
+RETURN u.screenName, u.followingCount, count

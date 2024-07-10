@@ -386,62 +386,68 @@ class PostgreQueries:
                     all_friends.append((user_id, distance))
         return all_friends
 
-    def run_all_queries(self, screenName, limit=10):
-        try: 
-            # 1. Find top 10 most influencing Users in our social graph.
-            print("Top Influencing Users:")
-            for r in self.get_top_influencing_users(limit):
+    def run_all_queries(self, screenName, limit=10, show_results=False):
+        # 1. Find top 10 most influencing Users in our social graph.
+        print("Top Influencing Users:")
+        records = self.get_top_influencing_users(limit)
+        print(f"Returned {len(records)}.")
+        if show_results:
+            for r in records:
                 print(r)
 
-            print("----------------------------------------------------------------------------------------------")
+        print("----------------------------------------------------------------------------------------------")
 
-            # 2. Get most trending Tags across all Users.
-            print("Most Trending Tags:")
-            for r in self.get_trending_tags(limit):
+        # 2. Get most trending Tags across all Users.
+        print("Most Trending Tags:")
+        records = self.get_trending_tags(limit)
+        print(f"Returned {len(records)}.")
+        if show_results:
+            for r in records:
                 print(r)
 
-            print("----------------------------------------------------------------------------------------------")
+        print("----------------------------------------------------------------------------------------------")
 
-            # 3. Based on a User, suggest him more Users to follow (that he is not following rn).
-            #  a. Simple User-based recommendations (Collaborative Filtering)ù
-            print("Suggest User User-Based: ")
-            suggested_users_userBased = self.suggest_users_user_based(screenName, limit)
-            for userId, distance, frequency in suggested_users_userBased:
-                print(f"UserId: {userId}, Distance: {distance}, Frequency: {frequency}")
-            #  b. Simple Item-based reccomentations (Content-Based)
-            print("\nSuggest User Item-Based: ")
-            for r in self.suggest_users_content_based(screenName, limit):
+        # 3. Based on a User, suggest him more Users to follow (that he is not following rn).
+        #  a. Simple User-based recommendations (Collaborative Filtering)ù
+        print("Suggest User User-Based: ")
+        suggested_users_userBased = self.suggest_users_user_based(screenName, limit)
+        print(f"Returned {len(records)}.")
+
+        for userId, distance, frequency in suggested_users_userBased:
+            print(f"UserId: {userId}, Distance: {distance}, Frequency: {frequency}")
+        #  b. Simple Item-based reccomentations (Content-Based)
+        print("\nSuggest User Item-Based: ")
+        records = self.suggest_users_content_based(screenName, limit)
+        print(f"Returned {len(records)}.")
+        if show_results:
+            for r in records:
                 print(r)
 
-            print("----------------------------------------------------------------------------------------------")
+        print("----------------------------------------------------------------------------------------------")
 
-            # 4. Based on a User, suggest him Posts that he could be interested in.
-            #  a. Simple User-based recommendations (Collaborative Filtering)
-            print("Suggest Post User-Based: ")
-            for r in self.suggest_posts_user_based(screenName, limit):
+        # 4. Based on a User, suggest him Posts that he could be interested in.
+        #  a. Simple User-based recommendations (Collaborative Filtering)
+        print("Suggest Post User-Based: ")
+        records = self.suggest_posts_user_based(screenName, limit)
+        print(f"Returned {len(records)}.")
+        if show_results:
+            for r in records:
                 print(r)
-            #  b. Simple Item-based reccomentations (Content)
-            print("\nSuggest Post Item-Based: ")
-            for r in self.suggest_posts_content_based(screenName, limit):
+        #  b. Simple Item-based reccomentations (Content)
+        print("\nSuggest Post Item-Based: ")
+
+        print("Suggest Post User-Based: ")
+        records = self.suggest_posts_content_based(screenName, limit)
+        print(f"Returned {len(records)}.")
+        if show_results:
+            for r in records:
                 print(r)
 
-            print("----------------------------------------------------------------------------------------------")
-            
-            execution_times = self.calculate_time(screenName, limit)
-            print(execution_times)
-            return execution_times
-            show_execution_time = input("Do you want to see the execution time? (y/n): ")
-            # Check the user's response
-            if show_execution_time.lower() == "y":
-                plot_execution_times(execution_times)
-                # plot_followers_of_followers_times(461669641, 10)  
-                # plot_trending_tags(get_trending_tags())
-
-            else:
-                print("Execution time not shown.")
-
-        except Exception as e:
-            print("Error:", e)
+        print("----------------------------------------------------------------------------------------------")
+        
+        execution_times = self.calculate_time(screenName, limit)
+        print(execution_times)
+        return execution_times
 
     def calculate_time(self, screenName, limit=10):
         queries = [
@@ -472,11 +478,12 @@ class Neo4jQueries:
     def close(self):
         self.driver.close()
 
-    def run_query(self, query):
+    def run_query(self, query, show_results=False):
             records, summary, _ = self.driver.execute_query(query, database_=NEO4J_DBNAME)
             
-            # for record in records:
-            #     print(record.data())
+            if show_results:
+                for record in records:
+                    print(record.data())
             
             print(f"The query returned {len(records)} records in {summary.result_available_after} ms and consumed them after {+summary.result_consumed_after} ms.")
             # try:
@@ -486,7 +493,7 @@ class Neo4jQueries:
             #     print(e)
             return records
 
-    def get_top_influencing_users(self, limit):
+    def get_top_influencing_users(self, limit, show_results):
         query = f"""
         PROFILE
         MATCH (u:User)
@@ -497,9 +504,9 @@ class Neo4jQueries:
         ORDER BY followersCount DESC
         LIMIT {limit}
         """
-        return self.run_query(query)
+        return self.run_query(query, show_results)
 
-    def get_trending_tags(self, limit):
+    def get_trending_tags(self, limit, show_results):
         query = f"""
         PROFILE
         MATCH ()-[r:HAS_TAG]->(t:Tag)
@@ -509,9 +516,9 @@ class Neo4jQueries:
         ORDER BY tag_count DESC
         LIMIT {limit}
         """
-        return self.run_query(query)
+        return self.run_query(query, show_results)
 
-    def suggest_users_user_based(self, screenName, limit):
+    def suggest_users_user_based(self, screenName, limit, show_results):
         query = f"""
         PROFILE
         MATCH p=(u:User{{screenName: "{screenName}"}})-[:FOLLOWS*2..3]->(other_u)
@@ -524,9 +531,9 @@ class Neo4jQueries:
         ORDER BY hops ASC, frequency DESC
         LIMIT {limit}
         """
-        return self.run_query(query)
+        return self.run_query(query, show_results)
 
-    def suggest_users_content_based(self, screenName, limit):
+    def suggest_users_content_based(self, screenName, limit, show_results):
         query = f"""
         PROFILE
         MATCH (u:User{{screenName: "{screenName}"}})-[:TWEETED]->(p)-[:HAS_TAG]->(t)<-[:HAS_TAG]-(other_p)<-[:TWEETED]-(other_u)
@@ -536,9 +543,9 @@ class Neo4jQueries:
             other_u.screenName AS screenName
         LIMIT {limit}
         """
-        return self.run_query(query)
+        return self.run_query(query, show_results)
 
-    def suggest_posts_user_based(self, screenName, limit):
+    def suggest_posts_user_based(self, screenName, limit, show_results):
         query = f"""
         PROFILE
         MATCH (u:User{{screenName: "{screenName}"}})-[:FOLLOWS]->(other_u)-[:TWEETED]->(other_p)-[:HAS_TAG]->(other_t)
@@ -547,9 +554,9 @@ class Neo4jQueries:
             other_t.text AS tag
         LIMIT {limit}
         """
-        return self.run_query(query)
+        return self.run_query(query, show_results)
 
-    def suggest_posts_content_based(self, screenName, limit):
+    def suggest_posts_content_based(self, screenName, limit, show_results):
         query = f"""
         PROFILE
         MATCH (u:User{{screenName: "{screenName}"}})-[:TWEETED]->(p)-[:HAS_TAG]->(t)<-[:HAS_TAG]-(other_p)
@@ -559,9 +566,9 @@ class Neo4jQueries:
             t.text AS tag
         LIMIT {limit}
         """
-        return self.run_query(query)
+        return self.run_query(query, show_results)
     
-    def get_followers_of_followers_of_specific_k(self, screenName, k):
+    def get_followers_of_followers_of_specific_k(self, screenName, k, show_results):
         query = f"""
         PROFILE
         MATCH (u:User{{screenName: "{screenName}"}})-[:FOLLOWS*{k}]->(other_u)
@@ -569,9 +576,9 @@ class Neo4jQueries:
         RETURN DISTINCT
             other_u.userId AS userId
         """
-        return self.run_query(query)
+        return self.run_query(query, show_results)
 
-    def get_followers_of_followers_up_to_k(self, screenName, k):
+    def get_followers_of_followers_up_to_k(self, screenName, k, show_results):
         query = f"""
         PROFILE
         MATCH (u:User{{screenName: "{screenName}"}})-[:FOLLOWS*1..{k}]->(other_u)
@@ -579,29 +586,29 @@ class Neo4jQueries:
         RETURN DISTINCT
             other_u.userId AS userId
         """
-        return self.run_query(query)
+        return self.run_query(query, show_results)
 
-    def run_all_queries(self, screenName, limit):
+    def run_all_queries(self, screenName, limit, show_results):
         print(f"1. Top {limit} Influencing Users")
-        self.get_top_influencing_users(limit)
+        self.get_top_influencing_users(limit, show_results)
 
         print("----------------------------------------------------------------------------------------------")
         print(f"2. Top {limit} Trending Tags:")
-        self.get_trending_tags(limit)
+        self.get_trending_tags(limit, show_results)
 
         print("----------------------------------------------------------------------------------------------")
         print(f"3a. Top {limit} User-based User Recommendations for {screenName}:")
-        self.suggest_users_user_based(screenName, limit)
+        self.suggest_users_user_based(screenName, limit, show_results)
 
         print(f"\n3b. Top {limit} Content-based User Recommendations for {screenName}:")
-        self.suggest_users_content_based(screenName, limit)
+        self.suggest_users_content_based(screenName, limit, show_results)
 
         print("----------------------------------------------------------------------------------------------")
         print(f"4a. Top {limit} User-based Post Recommendations for {screenName}:")
-        self.suggest_posts_user_based(screenName, limit)
+        self.suggest_posts_user_based(screenName, limit, show_results)
 
         print(f"\n4b. Top {limit} Content-based Post Recommendations for {screenName}:")
-        self.suggest_posts_content_based(screenName, limit)
+        self.suggest_posts_content_based(screenName, limit, show_results)
 
         print("----------------------------------------------------------------------------------------------")
         
@@ -622,12 +629,12 @@ class Neo4jQueries:
 
     def calculate_time(self, screenName, limit):
         queries = [
-            (self.get_top_influencing_users, limit),
-            (self.get_trending_tags, limit),
-            (self.suggest_users_user_based, screenName, limit),
-            (self.suggest_users_content_based, screenName, limit),
-            (self.suggest_posts_user_based, screenName, limit),
-            (self.suggest_posts_content_based, screenName, limit),
+            (self.get_top_influencing_users, limit, False),
+            (self.get_trending_tags, limit, False),
+            (self.suggest_users_user_based, screenName, limit, False),
+            (self.suggest_users_content_based, screenName, limit, False),
+            (self.suggest_posts_user_based, screenName, limit, False),
+            (self.suggest_posts_content_based, screenName, limit, False),
         ]
         
         execution_times = []
@@ -648,11 +655,11 @@ if __name__ == "__main__":
     screenName = "jdfollowhelp"
     limit = 10
     k_max = 8
-    neo4j_times = neo4j_queries.run_all_queries(screenName, limit)
+    neo4j_times = neo4j_queries.run_all_queries(screenName, limit, True)
     postgre_times = postgre_queries.run_all_queries(screenName, limit)
 
-    plot_execution_times(neo4j_times, postgre_times)
-    plot_followers_of_followers_times(postgre_queries, neo4j_queries, screenName, k_max)
+    # plot_execution_times(neo4j_times, postgre_times)
+    # plot_followers_of_followers_times(postgre_queries, neo4j_queries, screenName, k_max)
 
     # plot_execution_times_individual(neo4j_times, postgre_times)
     # plot_followers_of_followers_times(461669641, 10)  
