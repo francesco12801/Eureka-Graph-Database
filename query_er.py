@@ -20,11 +20,11 @@ HOST=os.getenv('HOST', '127.0.0.1')
 PORT=os.getenv('PORT', '5432')
 
 conn = psycopg2.connect(
-    dbname=DBNAME,
-    user=USER,
-    password=PASSWORD,
-    host=HOST,
-    port=PORT
+    dbname="dataManagement",
+    user="postgres",
+    password="2345",
+    host="127.0.0.1",
+    port="5432"
 )
 
 print(f"Done! '{USER}' has connected to '{DBNAME}' at {HOST}:{PORT}")
@@ -83,11 +83,37 @@ def count_friends_of_friends(user_id):
     return result[0] if result else 0
 
 
-def suggest_post_itemBased(screenName):
-    return
+def suggest_post_userBased(screenName):
+    cur.execute("""
+
+        SELECT 
+        p.postId AS post,
+        other_u.screenName AS otherUser
+        FROM "User" u
+        JOIN "Follows" f ON u.userId = f.followerId
+        JOIN "User" other_u ON f.followedId = other_u.userId
+        JOIN "Post" p ON other_u.userId = p.userId
+        WHERE u.screenName = %s
+        LIMIT 10;
+    """,(screenName,))
+    return cur.fetchall()
 
 def suggest_post_itemBased(screenName):
-    return
+    cur.execute("""
+        SELECT other_p.postId AS otherPost,
+        t.text AS tag
+        FROM "User" u
+        JOIN "Post" p ON u.userId = p.userId
+        JOIN "Has_Tag" ht1 ON p.postId = ht1.postId
+        JOIN "Tag" t ON ht1.tagText = t.text
+        JOIN "Has_Tag" ht2 ON t.text = ht2.tagText
+        JOIN "Post" other_p ON ht2.postId = other_p.postId
+        WHERE u.screenName = %s
+        AND other_p.postId <> p.postId
+        LIMIT 10;
+
+    """,(screenName,))
+    return cur.fetchall()
 
 def suggest_users_itemBased(screenName):
     cur.execute("""      
@@ -109,8 +135,6 @@ def suggest_users_itemBased(screenName):
         AND other_u.userId <> u.userId
         AND f.followedId IS NULL
         LIMIT 10;
-
-
     """,(screenName,))
     return cur.fetchall() 
     
@@ -345,10 +369,12 @@ try:
     # print("Users with screenname '_notmichelle':", get_users_by_screenname("_notmichelle"))
     # print(get_posts_by_tag("#nationaldogday"))
     # print("Friends of friends of user 1393409100:", count_friends_of_friends(461669641))
-    # print("First 100 User IDs:", get_first_100_users())
-    print("Suggest User Item-Based: ", suggest_users_itemBased("jdfollowhelp"))
+    print("First 100 User IDs:", get_first_100_users())
+    print("Suggest Post User-Based: ", suggest_post_userBased("jdfollowhelp"))
+    print("Suggest Post Item-Based: ", suggest_post_itemBased("jdfollowhelp"))
+    #print("Suggest User Item-Based: ", suggest_users_itemBased("jdfollowhelp"))
     # print("Top 10 Influencing Users:", get_top_influencing_users())
-    print("Most Trending Tags:", get_most_trending_tags())
+    #print("Most Trending Tags:", get_most_trending_tags())
     # print("Most Trending Tags across Influencer:", get_trending_tags_among_influencers())
     # print("Suggest User:", suggest_users_to_follow(1393409100))
     # print("FOF: ", get_FOF('jdfollowhelp'))
