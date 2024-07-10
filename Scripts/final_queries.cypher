@@ -1,7 +1,7 @@
 // 1. Find top 10 most influencing Users in our social graph.
 // - based on their follower number.
 MATCH (u: User)
-RETURN u ORDER BY u.followersCount LIMIT 10;
+RETURN u ORDER BY u.followersCount DESC LIMIT 10;
 
 // ----------------------------------------------------------------------------------------------
 
