@@ -1,5 +1,6 @@
 // Choose how many rows to import from csv file
-:param batch_size => 100;
+:param max_rows => 1000;
+:param batch_size => 200;
 
 // ----------------------------------------------------------------------------------------------
 
@@ -27,7 +28,7 @@ CREATE TEXT INDEX text_index_Tag_text IF NOT EXISTS FOR (t:Tag) ON (t.text);
 // ----------------------------------------------------------------------------------------------
 
 LOAD CSV WITH HEADERS FROM 'file:///data.csv' AS row
-WITH row
+WITH row LIMIT $max_rows
 
 // Create User nodes
 MERGE (u:User {userId: toInteger(row.id)})
@@ -52,7 +53,7 @@ MERGE (u)-[:TWEETED]->(p)
 // ----------------------------------------------------------------------------------------------
 
 LOAD CSV WITH HEADERS FROM 'file:///data.csv' AS row
-WITH row
+WITH row LIMIT $max_rows
 MATCH (p:Post {postId: toInteger(row.tweetId)})
 UNWIND split(row.tags, "|") as tagText
     // Create Tag nodes
@@ -64,7 +65,7 @@ UNWIND split(row.tags, "|") as tagText
 // ----------------------------------------------------------------------------------------------
 
 :auto LOAD CSV WITH HEADERS FROM 'file:///data.csv' AS row
-WITH row
+WITH row LIMIT $max_rows
 
 // Execute in batches of $batch_size rows
 CALL {
@@ -73,12 +74,8 @@ CALL {
     // MATCH (old_u: User)
     // RETURN count(old_u) AS old_users
     UNWIND split(row.friends, "|") as friendId
-        // For every friend create a User node if it doesn't exist yet
-        MERGE (f:User {userId: toInteger(friendId)})
-        ON CREATE
-            SET
-                f.followersCount=0,
-                f.followingCount=0
+        // For every friend match a User node
+        MATCH (f:User {userId: toInteger(friendId)})
 
         // Create FOLLOWS relationship
         MERGE (u)-[:FOLLOWS]->(f)
@@ -92,10 +89,10 @@ CALL {
 
 // ----------------------------------------------------------------------------------------------
 
-LOAD CSV WITH HEADERS FROM 'file:///data.csv' AS row
-WITH row
+// LOAD CSV WITH HEADERS FROM 'file:///data.csv' AS row
+// WITH row LIMIT $max_rows
 
-// Reload user to set correct followersCount
-MATCH (u:User {userId: toInteger(row.id)})
-SET u.followersCount=toInteger(row.followersCount)
-;
+// // Reload user to set correct followersCount
+// MATCH (u:User {userId: toInteger(row.id)})
+// SET u.followersCount=toInteger(row.followersCount)
+// ;
