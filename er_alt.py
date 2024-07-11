@@ -144,38 +144,29 @@ def get_users_count():
 
 # Funzione per inserire i dati nella tabella Follows
 def insert_follows(userId, friendId):
-    # Inserisci l'amico come utente se non esiste già
-    # cur.execute("SELECT 1 FROM \"User\" WHERE userId = %s", (friendId,))
-    # if cur.fetchone() is None:
-    #     # Ottieni le informazioni dell'amico dai dati disponibili
-    #     friend_data = {
-    #         'id': friendId,
-    #         'screenName': f"Friend_{friendId}",
-    #         'avatar': '',  # Inserisci un valore di default per l'avatar
-    #         'followersCount': 0,  # Inserisci un valore di default per i follower
-    #         'followingCount': 0,  # Inserisci un valore di default per gli amici
-    #         'lang': 'en'  # Inserisci un valore di default per la lingua
-    #     }
-    #     insert_user(friend_data)
-    cur.execute("""
-        INSERT INTO "User" (userId, followersCount, followingCount)
-        VALUES (%s, 1, 0)
-        ON CONFLICT (userId) DO UPDATE SET followersCount="User".followersCount+1
-    """, (friendId,))
+    # Inserisci la relazione solo se il friend id esiste già
+    cur.execute("SELECT 1 FROM \"User\" WHERE userId = %s", (friendId,))
+    if cur.fetchone() is not None:
+        # Inserisci la relazione di follow
+        cur.execute("""
+            INSERT INTO "Follows" (followerId, followedId)
+            VALUES (%s, %s)
+            ON CONFLICT (followerId, followedId) DO NOTHING
+        """, (userId, friendId))
 
-    # Inserisci la relazione di follow
-    cur.execute("""
-        INSERT INTO "Follows" (followerId, followedId)
-        VALUES (%s, %s)
-        ON CONFLICT (followerId, followedId) DO NOTHING
-    """, (userId, friendId))
+        # Aggiorna followingCount dell'userId
+        cur.execute("""
+            UPDATE "User"
+            SET followingCount="User".followingCount+1
+            WHERE userId = %s
+        """, (userId,))
 
-    # Aggiorna followingCount dell'userId
-    cur.execute("""
-        UPDATE "User"
-        SET followingCount="User".followingCount+1
-        WHERE userId = %s
-    """, (userId,))
+        # Aggiorna followersCount dell'userId
+        cur.execute("""
+            UPDATE "User"
+            SET followersCount="User".followersCount+1
+            WHERE userId = %s
+        """, (friendId,))
 
 # Funzione per inserire tutti gli utenti
 def insert_all_users(reader):
@@ -234,7 +225,7 @@ with open('data.csv', 'r') as f:
         rows = rows[:rows_limit]   # Convertiamo il reader in una lista per poterlo rileggere
     insert_all_users(rows)
     insert_other_data(rows)
-    update_all_users(rows)
+    # update_all_users(rows)
 
 # Chiudi la comunicazione con il database PostgreSQL
 cur.close()
