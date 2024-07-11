@@ -63,7 +63,7 @@ def plot_execution_times_subplots(neo4j_times, postgresql_times):
 
 def plot_execution_times(neo4j_times, postgresql_times):
     # Extract query names and execution times
-    queries = [query[0] for query in neo4j_times]
+    queries = [query[0].replace("_", " ").capitalize() for query in neo4j_times]
     neo4j_exec_times = [time[1] for time in neo4j_times]
     postgresql_exec_times = [time[1] for time in postgresql_times]
 
@@ -74,6 +74,8 @@ def plot_execution_times(neo4j_times, postgresql_times):
     
     # Create the bar plot
     fig, ax = plt.subplots()
+    fig.set_figwidth(10)
+    fig.set_figheight(6)
 
     # Plot the Neo4j execution times
     neo4j_bars = ax.bar(index, neo4j_exec_times, bar_width, label='Neo4j')
@@ -88,9 +90,11 @@ def plot_execution_times(neo4j_times, postgresql_times):
     ax.set_xticks([i + bar_width / 2 for i in index])
     ax.set_xticklabels(queries, rotation=45, ha='right')
     ax.legend()
+    # ax.grid(True)
 
     # Display the plot
     plt.tight_layout()
+    plt.savefig(f'img/{NEO4J_DBNAME}_queries.png')
     plt.show()
 
 def plot_execution_times_individual(neo4j_times, postgresql_times):
@@ -134,8 +138,8 @@ def plot_followers_of_followers_times(postgre, neo4j, screenName, max_k):
         postgre_times2.append(elapsed_time2)
 
     for k in k_values:
-        elapsed_time1 = measure_time(neo4j.get_followers_of_followers_of_specific_k, screenName, k)
-        elapsed_time2 = measure_time(neo4j.get_followers_of_followers_up_to_k, screenName, k)
+        elapsed_time1 = measure_time(neo4j.get_followers_of_followers_of_specific_k, screenName, k, False)
+        elapsed_time2 = measure_time(neo4j.get_followers_of_followers_up_to_k, screenName, k, False)
         print(f"NEO4J time of {k} level: {elapsed_time1} s")
         print(f"NEO4J time up to {k} level: {elapsed_time2} s")
 
@@ -163,6 +167,7 @@ def plot_followers_of_followers_times(postgre, neo4j, screenName, max_k):
     plt.title('Execution Time Comparison for Friends of Friends Query')
     plt.legend()
     plt.grid(True)
+    plt.savefig(f'img/{NEO4J_DBNAME}_fof_{k}.png')
     plt.show()
 
 class PostgreQueries:
@@ -390,7 +395,7 @@ class PostgreQueries:
         # 1. Find top 10 most influencing Users in our social graph.
         print("Top Influencing Users:")
         records = self.get_top_influencing_users(limit)
-        print(f"Returned {len(records)}.")
+        print(f"Returned {len(records)} records.")
         if show_results:
             for r in records:
                 print(r)
@@ -400,7 +405,7 @@ class PostgreQueries:
         # 2. Get most trending Tags across all Users.
         print("Most Trending Tags:")
         records = self.get_trending_tags(limit)
-        print(f"Returned {len(records)}.")
+        print(f"Returned {len(records)} records.")
         if show_results:
             for r in records:
                 print(r)
@@ -411,14 +416,15 @@ class PostgreQueries:
         #  a. Simple User-based recommendations (Collaborative Filtering)ù
         print("Suggest User User-Based: ")
         suggested_users_userBased = self.suggest_users_user_based(screenName, limit)
-        print(f"Returned {len(records)}.")
+        print(f"Returned {len(records)} records.")
 
-        for userId, distance, frequency in suggested_users_userBased:
-            print(f"UserId: {userId}, Distance: {distance}, Frequency: {frequency}")
+        if show_results:
+            for userId, distance, frequency in suggested_users_userBased:
+                print(f"UserId: {userId}, Distance: {distance}, Frequency: {frequency}")
         #  b. Simple Item-based reccomentations (Content-Based)
         print("\nSuggest User Item-Based: ")
         records = self.suggest_users_content_based(screenName, limit)
-        print(f"Returned {len(records)}.")
+        print(f"Returned {len(records)} records.")
         if show_results:
             for r in records:
                 print(r)
@@ -429,7 +435,7 @@ class PostgreQueries:
         #  a. Simple User-based recommendations (Collaborative Filtering)
         print("Suggest Post User-Based: ")
         records = self.suggest_posts_user_based(screenName, limit)
-        print(f"Returned {len(records)}.")
+        print(f"Returned {len(records)} records.")
         if show_results:
             for r in records:
                 print(r)
@@ -438,7 +444,7 @@ class PostgreQueries:
 
         print("Suggest Post User-Based: ")
         records = self.suggest_posts_content_based(screenName, limit)
-        print(f"Returned {len(records)}.")
+        print(f"Returned {len(records)} records.")
         if show_results:
             for r in records:
                 print(r)
@@ -485,12 +491,7 @@ class Neo4jQueries:
                 for record in records:
                     print(record.data())
             
-            print(f"The query returned {len(records)} records in {summary.result_available_after} ms and consumed them after {+summary.result_consumed_after} ms.")
-            # try:
-            #     # print("profile Time: ", summary.profile['time'])
-            #     # print(summary.profile['args']['string-representation'])
-            # except Exception as e:
-            #     print(e)
+            print(f"The query returned {len(records)} records records in {summary.result_available_after} ms and consumed them after {+summary.result_consumed_after} ms.")
             return records
 
     def get_top_influencing_users(self, limit, show_results):
@@ -588,7 +589,7 @@ class Neo4jQueries:
         """
         return self.run_query(query, show_results)
 
-    def run_all_queries(self, screenName, limit, show_results):
+    def run_all_queries(self, screenName, limit, show_results=False):
         print(f"1. Top {limit} Influencing Users")
         self.get_top_influencing_users(limit, show_results)
 
@@ -654,12 +655,17 @@ if __name__ == "__main__":
 
     screenName = "jdfollowhelp"
     limit = 10
-    k_max = 8
-    neo4j_times = neo4j_queries.run_all_queries(screenName, limit, True)
-    postgre_times = postgre_queries.run_all_queries(screenName, limit)
+    k_max = 5
 
-    # plot_execution_times(neo4j_times, postgre_times)
-    # plot_followers_of_followers_times(postgre_queries, neo4j_queries, screenName, k_max)
+    print("=======================================================================")
+    print("NEO4J\n\n")
+    neo4j_times = neo4j_queries.run_all_queries(screenName, limit, False)
+    print("=======================================================================")
+    print("POSTGRESQL\n\n")
+    postgre_times = postgre_queries.run_all_queries(screenName, limit, False)
+
+    plot_execution_times(neo4j_times, postgre_times)
+    plot_followers_of_followers_times(postgre_queries, neo4j_queries, screenName, k_max)
 
     # plot_execution_times_individual(neo4j_times, postgre_times)
     # plot_followers_of_followers_times(461669641, 10)  
