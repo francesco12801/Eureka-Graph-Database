@@ -29,24 +29,24 @@ CREATE TEXT INDEX text_index_Tag_text IF NOT EXISTS FOR (t:Tag) ON (t.text);
 LOAD CSV WITH HEADERS FROM 'file:///data.csv' AS row
 WITH row
 
-// Create User nodes
+// Create full users User nodes
 MERGE (u:User {userId: toInteger(row.id)})
 ON CREATE
     SET
         u.screenName=row.screenName,
         u.avatar=row.avatar,
-        u.followersCount=0, // Initialize to 0, override real value later
-        u.followingCount=0, // Initialize to 0, update for every FOLLOWS relationship (incongurence between len(friends) and followingCount)
+        u.followersCount=0, // Override real value later
+        u.followingCount=0,
         u.lang=row.lang
 
 // Create Post nodes
 MERGE (p:Post {postId: toInteger(row.tweetId)})
-ON CREATE
-    SET
-        p.timestamp=datetime({epochmillis:toInteger(row.lastSeen)/1000})
 
 // Create TWEETED relationship
-MERGE (u)-[:TWEETED]->(p)
+MERGE (u)-[r:TWEETED]->(p)
+ON CREATE
+    SET
+        r.timestamp=datetime({epochmillis:toInteger(row.lastSeen)/1000})
 ;
 
 // ----------------------------------------------------------------------------------------------
@@ -70,10 +70,8 @@ WITH row
 CALL {
     WITH row
     MATCH (u:User {userId: toInteger(row.id)})
-    // MATCH (old_u: User)
-    // RETURN count(old_u) AS old_users
     UNWIND split(row.friends, "|") as friendId
-        // For every friend create a User node if it doesn't exist yet
+        // Create a partial User if it doesn't exist yet
         MERGE (f:User {userId: toInteger(friendId)})
         ON CREATE
             SET
@@ -95,7 +93,7 @@ CALL {
 LOAD CSV WITH HEADERS FROM 'file:///data.csv' AS row
 WITH row
 
-// Reload user to set correct followersCount
+// Reload full users to set correct followersCount
 MATCH (u:User {userId: toInteger(row.id)})
 SET u.followersCount=toInteger(row.followersCount)
 ;

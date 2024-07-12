@@ -38,7 +38,14 @@ RETURN u, p, other_p, t LIMIT 10;
 
 // --------------------------------------------------------------------------------------------
 // CHECK FOR INCONSISTENCY BETWEEN # OF OUTGOING :FOLLOW EDGES AND FOLLOWINGCOUNT
-MATCH (u: User)-[:FOLLOWS]->(p: User)
-WITH u, COUNT(p) AS count
-WHERE u.followingCount-count>=1
-RETURN u.screenName, u.followingCount, count
+MATCH (u: User)-[r:FOLLOWS]->(p: User)
+WITH u, COUNT(r) AS out
+WHERE u.followingCount <> out
+RETURN u.screenName, u.followingCount, out
+ORDER BY abs(u.followingCount-out) DESC LIMIT 5;
+
+MATCH (u: User)<-[r:FOLLOWS]-(p: User)
+WITH u, COUNT(r) AS in
+WHERE u.followersCount <> in
+RETURN u.screenName, u.followersCount, in
+ORDER BY abs(u.followersCount-in) DESC LIMIT 5;

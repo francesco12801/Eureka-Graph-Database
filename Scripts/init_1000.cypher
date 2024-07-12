@@ -42,12 +42,12 @@ ON CREATE
 
 // Create Post nodes
 MERGE (p:Post {postId: toInteger(row.tweetId)})
-ON CREATE
-    SET
-        p.timestamp=datetime({epochmillis:toInteger(row.lastSeen)/1000})
 
 // Create TWEETED relationship
-MERGE (u)-[:TWEETED]->(p)
+MERGE (u)-[r:TWEETED]->(p)
+ON CREATE
+    SET
+        r.timestamp=datetime({epochmillis:toInteger(row.lastSeen)/1000})
 ;
 
 // ----------------------------------------------------------------------------------------------
@@ -96,7 +96,7 @@ CALL {
 LOAD CSV WITH HEADERS FROM 'file:///data.csv' AS row
 WITH row LIMIT $max_rows
 
-// Reload user to set correct followersCount
+// Reload full users to set correct followersCount
 MATCH (u:User {userId: toInteger(row.id)})
 SET u.followersCount=toInteger(row.followersCount)
 ;

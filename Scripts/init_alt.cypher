@@ -41,12 +41,12 @@ ON CREATE
 
 // Create Post nodes
 MERGE (p:Post {postId: toInteger(row.tweetId)})
-ON CREATE
-    SET
-        p.timestamp=datetime({epochmillis:toInteger(row.lastSeen)/1000})
 
 // Create TWEETED relationship
-MERGE (u)-[:TWEETED]->(p)
+MERGE (u)-[r:TWEETED]->(p)
+ON CREATE
+    SET
+        r.timestamp=datetime({epochmillis:toInteger(row.lastSeen)/1000})
 ;
 
 // ----------------------------------------------------------------------------------------------
