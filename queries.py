@@ -170,6 +170,7 @@ def plot_followers_of_followers_times(postgre, neo4j, screenName, max_k):
     plt.savefig(f'img/{NEO4J_DBNAME}_fof_{k}.png')
     plt.show()
 
+
 class PostgreQueries:
     def __init__(self, dbname, user, password, host, port):
         self.conn = psycopg.connect(
@@ -228,7 +229,7 @@ class PostgreQueries:
 
     # 3. Based on a User, suggest him more Users to follow (that he is not following rn).
     #  a. Simple User-based recommendations (Collaborative Filtering)
-    def suggest_users_content_based(self, screenName, limit=10):
+    def suggest_users_item_based(self, screenName, limit=10):
         self.cur.execute("""      
             SELECT DISTINCT u.screenName AS originalUser,
                     p.postId AS originalPost,
@@ -251,7 +252,7 @@ class PostgreQueries:
         """,(screenName, limit))
         return self.cur.fetchall() 
 
-    #  b. Simple Item-based reccomentations (Content-Based)
+    #  b. Simple Item-based reccomentations (Item-Based)
     def suggest_users_user_based(self, screenName, limit=10):
         # Amici diretti (distanza 1)
         self.cur.execute("""
@@ -315,8 +316,8 @@ class PostgreQueries:
         """,(screenName, limit))
         return self.cur.fetchall()
 
-    #  b. Simple Item-based reccomentations (Content)
-    def suggest_posts_content_based(self, screenName, limit=10):
+    #  b. Simple Item-based reccomentations (Item)
+    def suggest_posts_item_based(self, screenName, limit=10):
         self.cur.execute("""
             SELECT other_p.postId AS otherPost,
             t.text AS tag
@@ -421,9 +422,9 @@ class PostgreQueries:
         if show_results:
             for userId, distance, frequency in suggested_users_userBased:
                 print(f"UserId: {userId}, Distance: {distance}, Frequency: {frequency}")
-        #  b. Simple Item-based reccomentations (Content-Based)
+        #  b. Simple Item-based reccomentations (Item-Based)
         print("\nSuggest User Item-Based: ")
-        records = self.suggest_users_content_based(screenName, limit)
+        records = self.suggest_users_item_based(screenName, limit)
         print(f"Returned {len(records)} records.")
         if show_results:
             for r in records:
@@ -439,11 +440,11 @@ class PostgreQueries:
         if show_results:
             for r in records:
                 print(r)
-        #  b. Simple Item-based reccomentations (Content)
+        #  b. Simple Item-based reccomentations (Item)
         print("\nSuggest Post Item-Based: ")
 
         print("Suggest Post User-Based: ")
-        records = self.suggest_posts_content_based(screenName, limit)
+        records = self.suggest_posts_item_based(screenName, limit)
         print(f"Returned {len(records)} records.")
         if show_results:
             for r in records:
@@ -460,9 +461,9 @@ class PostgreQueries:
             (self.get_top_influencing_users, limit),
             (self.get_trending_tags, limit),
             (self.suggest_users_user_based, screenName, limit),
-            (self.suggest_users_content_based, screenName, limit),
+            (self.suggest_users_item_based, screenName, limit),
             (self.suggest_posts_user_based, screenName, limit),
-            (self.suggest_posts_content_based, screenName, limit),
+            (self.suggest_posts_item_based, screenName, limit),
         ]
         
         execution_times = []
@@ -476,7 +477,8 @@ class PostgreQueries:
         return execution_times
 
 class Neo4jQueries:
-    def __init__(self, uri, user, password):
+    def __init__(self, dbname, uri, user, password):
+        self.dbname = dbname
         self.driver = GraphDatabase.driver(uri, auth=(user, password))
         self.driver.verify_connectivity()
         print(f"Connection established with {uri} as '{user}'.")
@@ -485,7 +487,7 @@ class Neo4jQueries:
         self.driver.close()
 
     def run_query(self, query, show_results=False):
-            records, summary, _ = self.driver.execute_query(query, database_=NEO4J_DBNAME)
+            records, summary, _ = self.driver.execute_query(query, database_=self.dbname)
             
             if show_results:
                 for record in records:
@@ -534,7 +536,7 @@ class Neo4jQueries:
         """
         return self.run_query(query, show_results)
 
-    def suggest_users_content_based(self, screenName, limit, show_results):
+    def suggest_users_item_based(self, screenName, limit, show_results):
         query = f"""
         PROFILE
         MATCH (u:User{{screenName: "{screenName}"}})-[:TWEETED]->(p)-[:HAS_TAG]->(t)<-[:HAS_TAG]-(other_p)<-[:TWEETED]-(other_u)
@@ -557,7 +559,7 @@ class Neo4jQueries:
         """
         return self.run_query(query, show_results)
 
-    def suggest_posts_content_based(self, screenName, limit, show_results):
+    def suggest_posts_item_based(self, screenName, limit, show_results):
         query = f"""
         PROFILE
         MATCH (u:User{{screenName: "{screenName}"}})-[:TWEETED]->(p)-[:HAS_TAG]->(t)<-[:HAS_TAG]-(other_p)
@@ -601,15 +603,15 @@ class Neo4jQueries:
         print(f"3a. Top {limit} User-based User Recommendations for {screenName}:")
         self.suggest_users_user_based(screenName, limit, show_results)
 
-        print(f"\n3b. Top {limit} Content-based User Recommendations for {screenName}:")
-        self.suggest_users_content_based(screenName, limit, show_results)
+        print(f"\n3b. Top {limit} Item-based User Recommendations for {screenName}:")
+        self.suggest_users_item_based(screenName, limit, show_results)
 
         print("----------------------------------------------------------------------------------------------")
         print(f"4a. Top {limit} User-based Post Recommendations for {screenName}:")
         self.suggest_posts_user_based(screenName, limit, show_results)
 
-        print(f"\n4b. Top {limit} Content-based Post Recommendations for {screenName}:")
-        self.suggest_posts_content_based(screenName, limit, show_results)
+        print(f"\n4b. Top {limit} Item-based Post Recommendations for {screenName}:")
+        self.suggest_posts_item_based(screenName, limit, show_results)
 
         print("----------------------------------------------------------------------------------------------")
         
@@ -633,9 +635,9 @@ class Neo4jQueries:
             (self.get_top_influencing_users, limit, False),
             (self.get_trending_tags, limit, False),
             (self.suggest_users_user_based, screenName, limit, False),
-            (self.suggest_users_content_based, screenName, limit, False),
+            (self.suggest_users_item_based, screenName, limit, False),
             (self.suggest_posts_user_based, screenName, limit, False),
-            (self.suggest_posts_content_based, screenName, limit, False),
+            (self.suggest_posts_item_based, screenName, limit, False),
         ]
         
         execution_times = []
@@ -649,9 +651,9 @@ class Neo4jQueries:
         
         return execution_times
 
-if __name__ == "__main__":
-    neo4j_queries = Neo4jQueries(NEO4J_URI, NEO4J_USER, NEO4J_PASSWORD)
-    postgre_queries = PostgreQueries(POSTGRE_DBNAME, POSTGRE_USER, POSTGRE_PASSWORD, POSTGRE_HOST, POSTGRE_PORT)
+def get_results(dbname):
+    neo4j_queries = Neo4jQueries(dbname, NEO4J_URI, NEO4J_USER, NEO4J_PASSWORD)
+    postgre_queries = PostgreQueries(dbname, POSTGRE_USER, POSTGRE_PASSWORD, POSTGRE_HOST, POSTGRE_PORT)
 
     screenName = "jdfollowhelp"
     limit = 10
@@ -665,7 +667,7 @@ if __name__ == "__main__":
     postgre_times = postgre_queries.run_all_queries(screenName, limit, False)
 
     plot_execution_times(neo4j_times, postgre_times)
-    plot_followers_of_followers_times(postgre_queries, neo4j_queries, screenName, k_max)
+    # plot_followers_of_followers_times(postgre_queries, neo4j_queries, screenName, k_max)
 
     # plot_execution_times_individual(neo4j_times, postgre_times)
     # plot_followers_of_followers_times(461669641, 10)  
@@ -673,3 +675,68 @@ if __name__ == "__main__":
 
     neo4j_queries.close()
     postgre_queries.close()
+
+    return neo4j_times, postgre_times
+
+# Define the operations of interest
+operations = [
+    "get_top_influencing_users",
+    "get_trending_tags",
+    "suggest_users_item_based",
+    "suggest_posts_user_based",
+    "suggest_posts_item_based"
+]
+
+# Function to filter and average times for relevant operations
+def calculate_average_times(times_dict, operations):
+    averages = {}
+    for key in times_dict:
+        times = [time for name, time in times_dict[key] if name in operations]
+        averages[key] = sum(times) / len(times)
+    return averages
+
+def plot_final_results(neo4j_times, postgre_times):
+    # Calculate the average times for the selected operations
+    neo4j_avg_times = calculate_average_times(neo4j_times, operations)
+    postgre_avg_times = calculate_average_times(postgre_times, operations)
+
+    # Extracting keys (number of rows) and average times for plotting
+    keys = list(neo4j_avg_times.keys())
+    neo4j_avg = [neo4j_avg_times[key] for key in keys]
+    postgre_avg = [postgre_avg_times[key] for key in keys]
+
+    # Plotting the data
+    plt.plot(keys, neo4j_avg, label='Neo4j', marker='o')
+    plt.plot(keys, postgre_avg, label='PostgreSQL', marker='o')
+    plt.xlabel('Number of Rows')
+    plt.ylabel('Average Execution Time (s)')
+    plt.title('Average Execution Time Comparison: Neo4j vs PostgreSQL')
+    plt.legend()
+    plt.grid(True)
+    plt.savefig('img/final_comparison.png')
+    plt.show()
+
+if __name__ == "__main__":
+    neo4j_times = {}
+    postgre_times = {}
+
+    neo4j_times["1k"], postgre_times["1k"] = get_results("eureka-1000")
+    plot_final_results(neo4j_times, postgre_times)
+
+    # neo4j_times["5k"], postgre_times["5k"] = get_results("dataManagement5k")
+    # neo4j_times["10k"], postgre_times["10k"] = get_results("dataManagement10k")
+
+    # I'll have a dictionary with "1k", "5k" and "10k" as keys containing a list of tuples
+    # "1k" -> [(nome, tempo), (nome, tempo), ..]
+    # "10k" -> [(nome, tempo), (nome, tempo), ..]
+    # get_top_influencing_users
+    # get_trending_tags
+    # suggest_users_item_based
+    # suggest_posts_user_based
+    # suggest_posts_item_based
+
+    
+
+    
+
+    
