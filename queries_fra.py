@@ -652,8 +652,8 @@ class Neo4jQueries:
         return execution_times
 
 def get_results(postgredbname, neo4jdbname):
-    neo4j_queries = Neo4jQueries(postgredbname, NEO4J_URI, NEO4J_USER, NEO4J_PASSWORD)
-    postgre_queries = PostgreQueries(neo4jdbname, POSTGRE_USER, POSTGRE_PASSWORD, POSTGRE_HOST, POSTGRE_PORT)
+    neo4j_queries = Neo4jQueries(neo4jdbname, NEO4J_URI, NEO4J_USER, NEO4J_PASSWORD)
+    postgre_queries = PostgreQueries(postgredbname, POSTGRE_USER, POSTGRE_PASSWORD, POSTGRE_HOST, POSTGRE_PORT)
 
     screenName = "jdfollowhelp"
     limit = 10
@@ -666,7 +666,7 @@ def get_results(postgredbname, neo4jdbname):
     print("POSTGRESQL\n\n")
     postgre_times = postgre_queries.run_all_queries(screenName, limit, False)
 
-    # plot_execution_times(neo4j_times, postgre_times)
+    plot_execution_times(neo4j_times, postgre_times)
     # plot_followers_of_followers_times(postgre_queries, neo4j_queries, screenName, k_max)
 
     # plot_execution_times_individual(neo4j_times, postgre_times)
